@@ -1,12 +1,13 @@
 """
 Content manager for notes, todos, and calendar events.
-In production, these would be stored in a database.
+Optimized for Google Meet transcripts and Google Calendar integration.
+In production, these would be stored in a database and synced with Google Workspace.
 """
 from typing import List, Dict, Optional
 from datetime import datetime
 from app.models import Note, TodoItem, CalendarEvent, Evidence
 from app.store import vector_store
-from app.gemini_client import generate_text
+from app.gemini_client import generate_text, generate_structured_output
 from app.config import settings
 import uuid
 import logging
@@ -14,6 +15,16 @@ import json
 import re
 
 logger = logging.getLogger(__name__)
+
+# System instruction for content extraction
+CONTENT_EXTRACTION_SYSTEM_INSTRUCTION = """You are an expert at analyzing Google Meet transcripts and extracting structured information.
+You excel at:
+- Identifying actionable tasks and their owners
+- Detecting meeting scheduling discussions
+- Recognizing deadlines and time commitments
+- Understanding context and implicit action items
+- Extracting Google Calendar-compatible event details
+Always provide precise, actionable information with supporting evidence."""
 
 # In-memory stores (in production, use PostgreSQL)
 notes_store: Dict[str, Note] = {}
@@ -89,34 +100,43 @@ def generate_todos_from_meeting(session_id: str) -> List[TodoItem]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this meeting transcript and extract TODO/action items. For each item assign:
-1. title: brief, actionable (verb-first)
-2. description: what needs to be done
-3. priority: low, medium, or high (high = deadlines or "urgent"/"ASAP", low = nice-to-have)
-4. due_date: if mentioned, YYYY-MM-DD
-5. priority_score: integer 1-5 (5 = most urgent, 1 = lowest). Use 3 for medium when unclear.
-6. timestamps: transcript timestamps that support this todo
+    prompt = f"""Analyze this Google Meet transcript and extract TODO items.
 
-Transcript:
+Google Meet Transcript:
 {context}
 
-Respond with a JSON array only:
+For each actionable todo item, extract:
+1. **Title**: Brief, actionable task description (start with verb)
+2. **Description**: Detailed explanation including context and owner if mentioned
+3. **Priority**: Assess urgency/importance as "low", "medium", or "high"
+4. **Due Date**: Extract or infer deadline (format: YYYY-MM-DD)
+5. **Timestamps**: Relevant timestamps where this task was discussed
+
+Guidelines:
+- Only include concrete, actionable tasks (not general discussions)
+- Look for phrases like "we need to", "action item", "follow up", "by [date]"
+- If someone is assigned, include their name in the description
+- Prioritize based on urgency words (ASAP, urgent, by EOD = high)
+- Include both explicit and implicit action items
+
+Provide response as a JSON array:
 [
   {{
     "title": "Complete project proposal",
-    "description": "Write and submit the Q2 project proposal",
+    "description": "Write and submit the Q2 project proposal. Assigned to: Sarah",
     "priority": "high",
     "due_date": "2024-03-15",
-    "priority_score": 4,
     "timestamps": ["00:01:20", "00:02:30"]
   }}
-]
-
-Include only concrete action items with clear owners or deadlines when mentioned.
-"""
+]"""
     
     try:
-        content = generate_text(prompt, model=settings.gemini_model).strip()
+        content = generate_text(
+            prompt, 
+            model=settings.gemini_model,
+            temperature=0.2,  # Low temperature for precise extraction
+            system_instruction=CONTENT_EXTRACTION_SYSTEM_INSTRUCTION
+        ).strip()
         
         # Extract JSON
         if "```json" in content:
@@ -124,8 +144,8 @@ Include only concrete action items with clear owners or deadlines when mentioned
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
         
-        raw = json.loads(content)
-        todos_data = raw if isinstance(raw, list) else [raw]
+        todos_data = json.loads(content)
+        
         todos = []
         for todo_data in todos_data:
             todo_id = str(uuid.uuid4())
@@ -152,16 +172,11 @@ Include only concrete action items with clear owners or deadlines when mentioned
                         speaker=chunk.get("speaker")
                     ))
             
-            # Normalize priority from priority_score (1-5) or explicit priority string
-            priority = todo_data.get("priority", "medium")
-            if not priority or priority not in ("low", "medium", "high"):
-                score = todo_data.get("priority_score", 3)
-                priority = "high" if score >= 4 else ("low" if score <= 2 else "medium")
             todo = TodoItem(
                 todo_id=todo_id,
                 title=todo_data["title"],
                 description=todo_data["description"],
-                priority=priority,
+                priority=todo_data.get("priority", "medium"),
                 due_date=todo_data.get("due_date"),
                 evidence=evidence[:settings.max_evidence_quotes]
             )
@@ -193,34 +208,48 @@ def generate_calendar_events(session_id: str) -> List[CalendarEvent]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this meeting transcript and extract calendar/scheduled events. For each event include:
-1. title: meeting or event name
-2. description: purpose or agenda
-3. date: YYYY-MM-DD if mentioned
-4. time: HH:MM 24-hour if mentioned
-5. duration_minutes: number if mentioned (e.g. "30 min" -> 30, "1 hour" -> 60)
-6. timestamps: transcript timestamps that mention this event
+    prompt = f"""Analyze this Google Meet transcript and extract calendar events for Google Calendar.
 
-Transcript:
+Google Meet Transcript:
 {context}
 
-Respond with a JSON array only. Use null for missing date/time/duration:
+For each mentioned meeting or event, extract:
+1. **Title**: Meeting/event name (clear and descriptive)
+2. **Description**: Purpose, agenda, attendees, or notes
+3. **Date**: Event date (format: YYYY-MM-DD)
+4. **Time**: Start time (format: HH:MM in 24-hour format)
+5. **Duration**: Length in minutes (default to 60 if not specified)
+6. **Timestamps**: Where in the transcript this was discussed
+
+Guidelines for Google Calendar compatibility:
+- Look for scheduling discussions: "let's meet", "schedule", "next week", "tomorrow"
+- Extract both explicit dates/times and relative references (e.g., "next Monday at 2pm")
+- Include recurring meeting mentions (e.g., "weekly standup")
+- Note if it's a follow-up meeting or new event
+- Include participant names if mentioned
+- For time zones, assume meeting timezone unless specified
+
+Provide response as a JSON array:
 [
   {{
-    "title": "Kickoff meeting",
-    "description": "Project kickoff with stakeholders",
+    "title": "Project kickoff meeting",
+    "description": "Q2 project kickoff with stakeholders. Attendees: Sarah, John, Team leads",
     "date": "2024-03-20",
     "time": "14:00",
     "duration_minutes": 60,
-    "timestamps": ["00:01:45"]
+    "timestamps": ["00:01:45", "00:02:10"]
   }}
 ]
 
-Include only events that are explicitly scheduled or have a date/time. Skip vague future plans.
-"""
+Only include meetings/events that have at least a date or time reference."""
     
     try:
-        content = generate_text(prompt, model=settings.gemini_model).strip()
+        content = generate_text(
+            prompt, 
+            model=settings.gemini_model,
+            temperature=0.2,  # Low temperature for precise extraction
+            system_instruction=CONTENT_EXTRACTION_SYSTEM_INSTRUCTION
+        ).strip()
         
         # Extract JSON
         if "```json" in content:
@@ -228,8 +257,8 @@ Include only events that are explicitly scheduled or have a date/time. Skip vagu
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
         
-        raw = json.loads(content)
-        events_data = raw if isinstance(raw, list) else [raw]
+        events_data = json.loads(content)
+        
         events = []
         for event_data in events_data:
             event_id = str(uuid.uuid4())

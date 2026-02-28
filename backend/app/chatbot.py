@@ -1,6 +1,7 @@
 """
 AI Chatbot that can answer questions about all content:
-transcripts, notes, todos, and calendar events.
+Google Meet transcripts, notes, todos, and Google Calendar events.
+Optimized for Google Workspace integration and context awareness.
 """
 from typing import List
 from app.models import ChatbotResponse, Evidence
@@ -12,6 +13,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# System instruction for Google Workspace-aware chatbot
+WORKSPACE_CHATBOT_SYSTEM_INSTRUCTION = """You are an intelligent assistant for Google Workspace users, specializing in meeting analysis.
+You help users by:
+- Answering questions about Google Meet transcripts
+- Tracking action items and todos
+- Managing calendar events and schedules
+- Organizing meeting notes
+- Providing context-aware insights across all meeting content
+
+You understand Google Workspace terminology and workflows. Always provide evidence-based answers with specific references."""
+
 
 def build_context_from_all_content(question: str, context_types: List[str]) -> tuple[str, List[Evidence]]:
     """
@@ -21,17 +33,17 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
     context_parts = []
     all_evidence = []
     
-    # Search transcripts
+    # Search Google Meet transcripts
     if "transcripts" in context_types:
         # Get all sessions and search across them
         # For MVP, we'll search recent chunks
         # In production, maintain a session index
         try:
             # This is a simplified approach - in production, track all session IDs
-            logger.info("Searching transcripts...")
-            context_parts.append("=== MEETING TRANSCRIPTS ===")
+            logger.info("Searching Google Meet transcripts...")
+            context_parts.append("=== GOOGLE MEET TRANSCRIPTS ===")
             # For now, we'll note this limitation
-            context_parts.append("(Transcript search requires session_id - use Q&A panel for specific sessions)")
+            context_parts.append("(Full transcript search requires session_id - use Q&A panel for specific Google Meet sessions)")
         except Exception as e:
             logger.error(f"Error searching transcripts: {e}")
     
@@ -66,10 +78,10 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
                 speaker="Todo List"
             ))
     
-    # Search calendar events
+    # Search Google Calendar events
     if "events" in context_types:
-        logger.info("Searching calendar events...")
-        context_parts.append("\n=== CALENDAR EVENTS ===")
+        logger.info("Searching Google Calendar events...")
+        context_parts.append("\n=== GOOGLE CALENDAR EVENTS ===")
         for event in list(events_store.values())[:10]:
             context_parts.append(f"\nEvent: {event.title}")
             context_parts.append(f"Description: {event.description}")
@@ -77,11 +89,13 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
                 context_parts.append(f"Date: {event.date}")
             if event.time:
                 context_parts.append(f"Time: {event.time}")
+            if event.duration_minutes:
+                context_parts.append(f"Duration: {event.duration_minutes} minutes")
             # Add as evidence
             all_evidence.append(Evidence(
                 timestamp=f"{event.date} {event.time}" if event.date and event.time else event.date or "No date",
-                quote=f"Event: {event.title} - {event.description[:150]}",
-                speaker="Calendar"
+                quote=f"Calendar Event: {event.title} - {event.description[:150]}",
+                speaker="Google Calendar"
             ))
     
     context_text = "\n".join(context_parts)
@@ -117,8 +131,7 @@ def chat_with_content(question: str, context_types: List[str]) -> ChatbotRespons
         for i, ev in enumerate(evidence)
     ])
     
-    prompt = f"""You are answering a question about meeting content (transcripts, notes, todos, calendar events).
-You MUST base your answer ONLY on the provided evidence.
+    prompt = f"""You are answering a question about Google Workspace meeting content.
 
 Question: {question}
 
@@ -130,14 +143,22 @@ Evidence:
 
 Instructions:
 1. Answer the question using ONLY the information in the evidence above
-2. Reference specific dates/times when relevant
-3. If the evidence doesn't fully answer the question, acknowledge the limitation
-4. Be concise and direct
+2. Reference specific dates, times, and sources (e.g., "According to the Google Meet transcript...", "In the calendar event...")
+3. For action items, mention assignees and deadlines if available
+4. For calendar events, include date, time, and duration details
+5. If the evidence doesn't fully answer the question, clearly state what information is missing
+6. Be helpful, concise, and professional
+7. If relevant, suggest how the user might find more information (e.g., "Check the full transcript for session X")
 
-Answer:"""
+Provide a comprehensive, evidence-based answer:"""
     
     try:
-        answer = generate_text(prompt, model=settings.gemini_model).strip()
+        answer = generate_text(
+            prompt, 
+            model=settings.gemini_model,
+            temperature=0.4,  # Slightly higher for conversational responses
+            system_instruction=WORKSPACE_CHATBOT_SYSTEM_INSTRUCTION
+        ).strip()
         
         # Determine which sources were used
         sources = []
