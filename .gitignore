@@ -51,10 +51,10 @@ Thumbs.db
 *.log
 logs/
 
-# Test files (optional - keep if you want to share)
-# backend/test_gemini.py
-# backend/check_models.py
-# backend/list_models.py
+# Test files with hardcoded API keys (DO NOT COMMIT)
+backend/test_gemini.py
+backend/check_models.py
+backend/list_models.py
 
 # Package locks (optional - some teams prefer to commit these)
 # frontend/package-lock.json
