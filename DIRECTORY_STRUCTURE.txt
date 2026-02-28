@@ -1,0 +1,207 @@
+CatchUp Project Structure
+=========================
+
+catchup/
+│
+├── README.md                      # Complete project documentation
+├── QUICKSTART.md                  # 5-minute setup guide
+├── ARCHITECTURE.md                # System architecture & design
+├── PROJECT_SUMMARY.md             # Project overview & checklist
+├── DIRECTORY_STRUCTURE.txt        # This file
+├── .gitignore                     # Git ignore rules
+├── .cursorrules                   # Project hard rules
+│
+├── backend/                       # FastAPI Backend
+│   ├── app/
+│   │   ├── __init__.py           # Package init
+│   │   ├── main.py               # FastAPI app & routes
+│   │   ├── config.py             # Pydantic settings
+│   │   ├── models.py             # Data models
+│   │   ├── store.py              # ChromaDB vector store
+│   │   ├── rag.py                # RAG engine & Q&A
+│   │   ├── actions.py            # Action proposal & execution
+│   │   ├── zoom.py               # Zoom RTMS stub
+│   │   └── stt.py                # Speech-to-text stub
+│   │
+│   ├── requirements.txt          # Python dependencies
+│   ├── .env.example              # Environment template
+│   ├── .env                      # Your config (create this)
+│   ├── run.sh                    # Backend startup script
+│   └── test_api.py               # API test suite
+│
+└── frontend/                      # Next.js Frontend
+    ├── app/
+    │   ├── components/
+    │   │   ├── ZoomMode.tsx      # Zoom meeting interface
+    │   │   ├── InPersonMode.tsx  # In-person recording interface
+    │   │   ├── RecapPanel.tsx    # Recap generation & display
+    │   │   ├── QAPanel.tsx       # Q&A interface
+    │   │   ├── ActionsPanel.tsx  # Action proposal & approval
+    │   │   └── EvidenceList.tsx  # Evidence display component
+    │   │
+    │   ├── lib/
+    │   │   └── api.ts            # API client (Axios)
+    │   │
+    │   ├── layout.tsx            # Root layout
+    │   ├── page.tsx              # Home page (mode selection)
+    │   └── globals.css           # Global styles
+    │
+    ├── package.json              # Node dependencies
+    ├── tsconfig.json             # TypeScript config
+    ├── tailwind.config.ts        # Tailwind CSS config
+    ├── postcss.config.js         # PostCSS config
+    ├── next.config.js            # Next.js config
+    ├── .env.local.example        # Environment template
+    ├── .env.local                # Your config (create this)
+    └── run.sh                    # Frontend startup script
+
+
+Key Files by Purpose
+====================
+
+DOCUMENTATION
+-------------
+README.md              - Start here! Complete guide
+QUICKSTART.md          - Fast 5-minute setup
+ARCHITECTURE.md        - System design & data flow
+PROJECT_SUMMARY.md     - Feature checklist
+.cursorrules           - Hard rules enforcement
+
+BACKEND CORE
+------------
+app/main.py            - API endpoints
+app/rag.py             - Q&A with evidence (HARD RULE #1)
+app/actions.py         - Approval gating (HARD RULE #2)
+app/store.py           - Vector database
+app/config.py          - Settings
+
+BACKEND STUBS
+-------------
+app/zoom.py            - Zoom integration (stub)
+app/stt.py             - Speech-to-text (stub)
+
+FRONTEND CORE
+-------------
+app/page.tsx           - Mode selection
+app/components/ZoomMode.tsx      - Zoom interface
+app/components/InPersonMode.tsx  - In-person interface
+app/components/QAPanel.tsx       - Q&A with evidence
+app/components/ActionsPanel.tsx  - Action approval UI
+app/lib/api.ts         - API client
+
+CONFIGURATION
+-------------
+backend/.env           - Backend config (create from .env.example)
+frontend/.env.local    - Frontend config (create from .env.local.example)
+
+TESTING
+-------
+backend/test_api.py    - API test suite
+
+
+Quick Navigation
+================
+
+Want to...
+
+1. Understand the project?
+   → Start with README.md
+
+2. Get it running quickly?
+   → Follow QUICKSTART.md
+
+3. Understand the architecture?
+   → Read ARCHITECTURE.md
+
+4. Check what's implemented?
+   → See PROJECT_SUMMARY.md
+
+5. Modify Q&A logic?
+   → Edit backend/app/rag.py
+
+6. Change action approval?
+   → Edit backend/app/actions.py
+
+7. Update frontend UI?
+   → Edit frontend/app/components/
+
+8. Add API endpoints?
+   → Edit backend/app/main.py
+
+9. Configure settings?
+   → Edit backend/app/config.py
+
+10. Test the API?
+    → Run backend/test_api.py
+
+
+Hard Rules Locations
+====================
+
+RULE #1: Evidence Requirement (2-5 quotes)
+- Enforced in: backend/app/rag.py
+- Config: backend/app/config.py (min/max_evidence_quotes)
+- UI: frontend/app/components/EvidenceList.tsx
+
+RULE #2: Approval Gating
+- Enforced in: backend/app/actions.py
+- API: POST /api/actions/approve
+- UI: frontend/app/components/ActionsPanel.tsx
+
+RULE #3: Modular Architecture
+- Documented in: .cursorrules
+- Structure: Separate files for each concern
+- See: backend/app/ directory
+
+
+File Count Summary
+==================
+
+Backend:      11 files (8 Python modules + 3 config)
+Frontend:     14 files (7 components + 7 config)
+Docs:          5 files
+Total:        30 files
+LOC:      ~3,000 lines
+
+
+Dependencies
+============
+
+Backend (Python):
+- fastapi
+- uvicorn
+- pydantic
+- pydantic-settings
+- chromadb
+- openai
+- python-multipart
+- python-dotenv
+
+Frontend (Node):
+- react
+- react-dom
+- next
+- axios
+- lucide-react
+- typescript
+- tailwindcss
+
+
+Ports
+=====
+
+Backend:  http://localhost:8000
+Frontend: http://localhost:3000
+
+
+Environment Variables
+=====================
+
+Backend (.env):
+- OPENAI_API_KEY          (required)
+- CHROMA_PERSIST_DIR      (optional)
+- EMBEDDING_MODEL         (optional)
+- LLM_MODEL               (optional)
+
+Frontend (.env.local):
+- NEXT_PUBLIC_API_URL     (optional, defaults to http://localhost:8000)

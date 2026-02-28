@@ -1,0 +1,48 @@
+# CatchUp Project Rules
+
+## Hard Rules (MUST ENFORCE)
+
+### 1. Evidence-Based Answers
+- **EVERY answer to user questions MUST include 2-5 evidence quotes with timestamps**
+- Evidence format: `[HH:MM:SS] "exact quote from transcript"`
+- If insufficient evidence exists, respond with: "Insufficient evidence in the transcript to answer this question."
+- NO speculation or answers without grounded evidence
+
+### 2. Action Approval Gating
+- **NO actions execute unless `approved=true` is sent from frontend**
+- All proposed actions must be stored in pending state
+- Actions include: Notion tasks, Calendar events, Email follow-ups, Slide generation
+- Backend must validate approval flag before execution
+
+### 3. Modular Code Structure
+- Keep backend modules separate:
+  - `app/config.py` - Configuration and settings
+  - `app/models.py` - Pydantic models
+  - `app/store.py` - ChromaDB vector store operations
+  - `app/rag.py` - RAG and Q&A logic
+  - `app/actions.py` - Action proposal and execution
+  - `app/zoom.py` - Zoom/RTMS transcript ingestion
+  - `app/stt.py` - Speech-to-text for in-person mode
+- Frontend: Follow Next.js App Router conventions
+
+## Code Quality Standards
+
+- Use type hints in Python (Pydantic models)
+- Use TypeScript in Next.js frontend
+- Include error handling for all API calls
+- Log important operations
+- Keep functions focused and single-purpose
+
+## Testing Requirements
+
+- Test evidence extraction returns 2-5 quotes
+- Test action approval gating blocks unapproved actions
+- Test both Zoom and in-person modes
+- Validate timestamp formats in evidence
+
+## Documentation
+
+- Document all API endpoints
+- Include example requests/responses
+- Update README with setup instructions
+- Comment complex RAG logic

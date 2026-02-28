@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+backend/venv/
+backend/env/
+
+# Environment - IMPORTANT: Never commit API keys!
+.env
+.env.local
+backend/.env
+frontend/.env.local
+
+# ChromaDB
+chroma_db/
+*.db
+backend/chroma_db/
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.DS_Store
+.next/
+out/
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+*.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Test files (optional - keep if you want to share)
+# backend/test_gemini.py
+# backend/check_models.py
+# backend/list_models.py
+
+# Package locks (optional - some teams prefer to commit these)
+# frontend/package-lock.json
+
+# Python cache
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
