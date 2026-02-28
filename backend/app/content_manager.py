@@ -1,12 +1,13 @@
 """
 Content manager for notes, todos, and calendar events.
-In production, these would be stored in a database.
+Optimized for Google Meet transcripts and Google Calendar integration.
+In production, these would be stored in a database and synced with Google Workspace.
 """
 from typing import List, Dict, Optional
 from datetime import datetime
 from app.models import Note, TodoItem, CalendarEvent, Evidence
 from app.store import vector_store
-from app.gemini_client import generate_text
+from app.gemini_client import generate_text, generate_structured_output
 from app.config import settings
 import uuid
 import logging
@@ -14,6 +15,16 @@ import json
 import re
 
 logger = logging.getLogger(__name__)
+
+# System instruction for content extraction
+CONTENT_EXTRACTION_SYSTEM_INSTRUCTION = """You are an expert at analyzing Google Meet transcripts and extracting structured information.
+You excel at:
+- Identifying actionable tasks and their owners
+- Detecting meeting scheduling discussions
+- Recognizing deadlines and time commitments
+- Understanding context and implicit action items
+- Extracting Google Calendar-compatible event details
+Always provide precise, actionable information with supporting evidence."""
 
 # In-memory stores (in production, use PostgreSQL)
 notes_store: Dict[str, Note] = {}
@@ -89,32 +100,43 @@ def generate_todos_from_meeting(session_id: str) -> List[TodoItem]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this meeting transcript and extract TODO items. For each todo:
-1. Title (brief, actionable)
-2. Description (what needs to be done)
-3. Priority (low/medium/high)
-4. Due date (if mentioned, format: YYYY-MM-DD)
-5. Relevant timestamps from transcript
+    prompt = f"""Analyze this Google Meet transcript and extract TODO items.
 
-Transcript:
+Google Meet Transcript:
 {context}
 
-Provide response as JSON array:
+For each actionable todo item, extract:
+1. **Title**: Brief, actionable task description (start with verb)
+2. **Description**: Detailed explanation including context and owner if mentioned
+3. **Priority**: Assess urgency/importance as "low", "medium", or "high"
+4. **Due Date**: Extract or infer deadline (format: YYYY-MM-DD)
+5. **Timestamps**: Relevant timestamps where this task was discussed
+
+Guidelines:
+- Only include concrete, actionable tasks (not general discussions)
+- Look for phrases like "we need to", "action item", "follow up", "by [date]"
+- If someone is assigned, include their name in the description
+- Prioritize based on urgency words (ASAP, urgent, by EOD = high)
+- Include both explicit and implicit action items
+
+Provide response as a JSON array:
 [
   {{
     "title": "Complete project proposal",
-    "description": "Write and submit the Q2 project proposal",
+    "description": "Write and submit the Q2 project proposal. Assigned to: Sarah",
     "priority": "high",
     "due_date": "2024-03-15",
     "timestamps": ["00:01:20", "00:02:30"]
   }}
-]
-
-Only include concrete action items, not general discussion points.
-"""
+]"""
     
     try:
-        content = generate_text(prompt, model=settings.gemini_model).strip()
+        content = generate_text(
+            prompt, 
+            model=settings.gemini_model,
+            temperature=0.2,  # Low temperature for precise extraction
+            system_instruction=CONTENT_EXTRACTION_SYSTEM_INSTRUCTION
+        ).strip()
         
         # Extract JSON
         if "```json" in content:
@@ -186,34 +208,48 @@ def generate_calendar_events(session_id: str) -> List[CalendarEvent]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this meeting transcript and extract calendar events. For each event:
-1. Title (meeting/event name)
-2. Description (purpose/agenda)
-3. Date (if mentioned, format: YYYY-MM-DD)
-4. Time (if mentioned, format: HH:MM in 24-hour)
-5. Duration in minutes (if mentioned)
-6. Relevant timestamps from transcript
+    prompt = f"""Analyze this Google Meet transcript and extract calendar events for Google Calendar.
 
-Transcript:
+Google Meet Transcript:
 {context}
 
-Provide response as JSON array:
+For each mentioned meeting or event, extract:
+1. **Title**: Meeting/event name (clear and descriptive)
+2. **Description**: Purpose, agenda, attendees, or notes
+3. **Date**: Event date (format: YYYY-MM-DD)
+4. **Time**: Start time (format: HH:MM in 24-hour format)
+5. **Duration**: Length in minutes (default to 60 if not specified)
+6. **Timestamps**: Where in the transcript this was discussed
+
+Guidelines for Google Calendar compatibility:
+- Look for scheduling discussions: "let's meet", "schedule", "next week", "tomorrow"
+- Extract both explicit dates/times and relative references (e.g., "next Monday at 2pm")
+- Include recurring meeting mentions (e.g., "weekly standup")
+- Note if it's a follow-up meeting or new event
+- Include participant names if mentioned
+- For time zones, assume meeting timezone unless specified
+
+Provide response as a JSON array:
 [
   {{
-    "title": "Kickoff meeting",
-    "description": "Project kickoff with stakeholders",
+    "title": "Project kickoff meeting",
+    "description": "Q2 project kickoff with stakeholders. Attendees: Sarah, John, Team leads",
     "date": "2024-03-20",
     "time": "14:00",
     "duration_minutes": 60,
-    "timestamps": ["00:01:45"]
+    "timestamps": ["00:01:45", "00:02:10"]
   }}
 ]
 
-Only include explicitly mentioned meetings/events with dates or times.
-"""
+Only include meetings/events that have at least a date or time reference."""
     
     try:
-        content = generate_text(prompt, model=settings.gemini_model).strip()
+        content = generate_text(
+            prompt, 
+            model=settings.gemini_model,
+            temperature=0.2,  # Low temperature for precise extraction
+            system_instruction=CONTENT_EXTRACTION_SYSTEM_INSTRUCTION
+        ).strip()
         
         # Extract JSON
         if "```json" in content:

@@ -8,18 +8,28 @@ class Settings(BaseSettings):
     # API Keys
     gemini_api_key: str
     
+    # Google Workspace (optional for future integration)
+    google_calendar_enabled: bool = False
+    google_meet_api_key: Optional[str] = None
+    
     # ChromaDB
     chroma_persist_dir: str = "./chroma_db"
     chroma_collection_name: str = "catchup_transcripts_gemini"
     
-    # Models
-    gemini_model: str = "gemini-1.5-flash"
-    gemini_embed_model: str = "models/gemini-embedding-001"
+    # Models - Using Google's Gemini for everything
+    gemini_model: str = "gemini-1.5-flash"  # Fast, efficient for meeting analysis
+    gemini_embed_model: str = "models/gemini-embedding-001"  # Optimized embeddings
     
     # RAG Settings
     min_evidence_quotes: int = 2
     max_evidence_quotes: int = 5
     retrieval_top_k: int = 10
+    chunk_size: int = 500  # Optimal for meeting transcripts
+    chunk_overlap: int = 50
+    
+    # AI Generation Settings
+    default_temperature: float = 0.3  # Lower for factual meeting analysis
+    max_output_tokens: int = 2048
     
     # Server
     host: str = "0.0.0.0"

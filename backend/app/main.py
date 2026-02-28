@@ -10,7 +10,7 @@ from app.models import (
     ProposeActionsResponse,
     ApproveActionRequest,
     ApproveActionResponse,
-    ZoomWebhookPayload,
+    GoogleMeetWebhookPayload,
     AudioUploadRequest,
     CreateNoteRequest,
     UpdateNoteRequest,
@@ -73,7 +73,7 @@ def read_root():
 def ingest_transcript(request: IngestTranscriptRequest):
     """
     Ingest transcript chunks into the vector store.
-    Supports both Zoom and in-person modes.
+    Supports both Google Meet and in-person modes.
     """
     try:
         logger.info(f"Ingesting {len(request.chunks)} chunks for session {request.session_id} (mode: {request.mode})")
@@ -171,15 +171,15 @@ def get_actions():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/zoom/webhook")
-def zoom_webhook(payload: ZoomWebhookPayload):
+@app.post("/api/google-meet/webhook")
+def google_meet_webhook(payload: GoogleMeetWebhookPayload):
     """
-    Zoom RTMS webhook endpoint (stub).
-    In production, this would receive real-time transcript chunks from Zoom.
+    Google Meet real-time transcription webhook endpoint (stub).
+    In production, this would receive real-time transcript chunks from Google Meet.
     """
     try:
-        logger.info(f"Received Zoom webhook for meeting {payload.meeting_id}")
-        success = process_zoom_webhook(payload)
+        logger.info(f"Received Google Meet webhook for meeting {payload.meeting_code}")
+        success = process_zoom_webhook(payload)  # Person 2 will update zoom.py to google_meet.py
         return {"status": "success" if success else "error"}
     except Exception as e:
         logger.error(f"Error processing Zoom webhook: {e}")

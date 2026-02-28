@@ -8,6 +8,15 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# System instruction for Google Meet meeting analysis
+MEETING_ANALYSIS_SYSTEM_INSTRUCTION = """You are an expert meeting analyst specializing in Google Meet transcripts. 
+Your role is to provide accurate, evidence-based answers about meeting content. You excel at:
+- Identifying key decisions and action items
+- Tracking participant contributions
+- Summarizing technical discussions
+- Extracting deadlines and commitments
+Always ground your responses in the provided evidence."""
+
 
 def extract_evidence_from_chunks(chunks: List[Dict[str, Any]]) -> List[Evidence]:
     """Extract evidence from retrieved chunks."""
@@ -64,23 +73,30 @@ def answer_question(session_id: str, question: str) -> QuestionResponse:
     # Build prompt with evidence
     evidence_text = format_evidence_for_prompt(evidence)
     
-    prompt = f"""You are answering a question about a meeting transcript. You MUST base your answer ONLY on the provided evidence.
+    prompt = f"""You are analyzing a Google Meet transcript to answer a specific question.
 
 Question: {question}
 
-Evidence from transcript:
+Evidence from Google Meet transcript:
 {evidence_text}
 
 Instructions:
 1. Answer the question using ONLY the information in the evidence above
-2. Reference specific timestamps when making points
-3. If the evidence doesn't fully answer the question, acknowledge the limitation
-4. Be concise and direct
+2. Reference specific timestamps (e.g., "At [00:05:23]...") when making points
+3. If multiple speakers discussed the topic, acknowledge different perspectives
+4. If the evidence doesn't fully answer the question, clearly state what information is missing
+5. Be concise, direct, and professional
+6. For action items or decisions, be explicit about who is responsible (if mentioned)
 
-Answer:"""
+Provide a clear, evidence-based answer:"""
     
     try:
-        answer = generate_text(prompt, model=settings.gemini_model).strip()
+        answer = generate_text(
+            prompt, 
+            model=settings.gemini_model,
+            temperature=0.2,  # Lower temperature for more factual responses
+            system_instruction=MEETING_ANALYSIS_SYSTEM_INSTRUCTION
+        ).strip()
         
         return QuestionResponse(
             answer=answer,
@@ -147,23 +163,43 @@ def generate_recap(session_id: str) -> RecapResponse:
         for chunk in all_chunks[:20]  # Limit context size
     ])
     
-    prompt = f"""Summarize this meeting transcript. Provide:
-1. A brief summary (2-3 sentences)
-2. 3-5 key points discussed
+    prompt = f"""Analyze this Google Meet transcript and create a comprehensive meeting recap.
 
-Transcript:
+Google Meet Transcript:
 {context}
 
-Format your response as:
-SUMMARY: <summary>
+Generate a professional meeting recap with:
+
+1. SUMMARY (2-3 sentences):
+   - What was the main purpose/topic of the meeting?
+   - What was the overall outcome or conclusion?
+
+2. KEY POINTS (3-5 bullet points):
+   - Major topics discussed
+   - Important decisions made
+   - Action items identified
+   - Key concerns or blockers raised
+   - Notable insights or recommendations
+
+Format your response EXACTLY as:
+SUMMARY: <your summary here>
+
 KEY POINTS:
 - <point 1>
 - <point 2>
 - <point 3>
-"""
+- <point 4>
+- <point 5>
+
+Focus on actionable information and concrete outcomes. Be specific and professional."""
     
     try:
-        content = generate_text(prompt, model=settings.gemini_model).strip()
+        content = generate_text(
+            prompt, 
+            model=settings.gemini_model,
+            temperature=0.3,  # Balanced temperature for summaries
+            system_instruction=MEETING_ANALYSIS_SYSTEM_INSTRUCTION
+        ).strip()
         
         # Parse response
         summary_match = re.search(r"SUMMARY:\s*(.+?)(?=KEY POINTS:|$)", content, re.DOTALL)
