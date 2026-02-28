@@ -3,6 +3,20 @@ from typing import List, Optional, Literal
 from datetime import datetime
 
 
+# ---------------------------------------------------------------------------
+# API Error Response (for consistent error handling & Swagger docs)
+# ---------------------------------------------------------------------------
+
+class ErrorResponse(BaseModel):
+    """Standard error response for all API errors."""
+    detail: str = Field(..., description="Human-readable error message")
+    status_code: int = Field(..., description="HTTP status code")
+
+
+# ---------------------------------------------------------------------------
+# Transcript & Ingest
+# ---------------------------------------------------------------------------
+
 class TranscriptChunk(BaseModel):
     """A chunk of transcript with timestamp."""
     timestamp: str = Field(..., description="Timestamp in HH:MM:SS format")
@@ -12,9 +26,9 @@ class TranscriptChunk(BaseModel):
 
 class IngestTranscriptRequest(BaseModel):
     """Request to ingest transcript chunks."""
-    session_id: str = Field(..., description="Unique session identifier")
+    session_id: str = Field(..., min_length=1, max_length=256, description="Unique session identifier")
     mode: Literal["zoom", "in-person"] = Field(..., description="Meeting mode")
-    chunks: List[TranscriptChunk] = Field(..., description="List of transcript chunks")
+    chunks: List[TranscriptChunk] = Field(..., min_length=1, description="List of transcript chunks")
 
 
 class Evidence(BaseModel):
@@ -26,8 +40,8 @@ class Evidence(BaseModel):
 
 class QuestionRequest(BaseModel):
     """Request to ask a question about the transcript."""
-    session_id: str = Field(..., description="Session identifier")
-    question: str = Field(..., description="User's question")
+    session_id: str = Field(..., min_length=1, max_length=256, description="Session identifier")
+    question: str = Field(..., min_length=1, max_length=2000, description="User's question")
 
 
 class QuestionResponse(BaseModel):
@@ -39,7 +53,7 @@ class QuestionResponse(BaseModel):
 
 class RecapRequest(BaseModel):
     """Request to generate a recap."""
-    session_id: str = Field(..., description="Session identifier")
+    session_id: str = Field(..., min_length=1, max_length=256, description="Session identifier")
 
 
 class RecapResponse(BaseModel):
@@ -71,7 +85,7 @@ class ProposedAction(BaseModel):
 
 class ProposeActionsRequest(BaseModel):
     """Request to propose actions from transcript."""
-    session_id: str = Field(..., description="Session identifier")
+    session_id: str = Field(..., min_length=1, max_length=256, description="Session identifier")
 
 
 class ProposeActionsResponse(BaseModel):
@@ -141,10 +155,10 @@ class Note(BaseModel):
 
 class CreateNoteRequest(BaseModel):
     """Request to create a note."""
-    session_id: str
-    title: str
-    content: str
-    date: str
+    session_id: str = Field(..., min_length=1, max_length=256)
+    title: str = Field(..., min_length=1, max_length=500)
+    content: str = Field(..., max_length=50_000)
+    date: str = Field(..., min_length=1, max_length=32)
 
 
 class UpdateNoteRequest(BaseModel):
@@ -168,7 +182,7 @@ class TranscriptResponse(BaseModel):
 
 class ChatbotRequest(BaseModel):
     """Request to chat with AI about all content."""
-    question: str = Field(..., description="User's question")
+    question: str = Field(..., min_length=1, max_length=2000, description="User's question")
     context_types: List[Literal["transcripts", "notes", "todos", "events"]] = Field(
         default=["transcripts", "notes", "todos", "events"],
         description="Types of content to search"

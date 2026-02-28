@@ -1,5 +1,10 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from app.models import (
     IngestTranscriptRequest,
     QuestionRequest,
@@ -20,7 +25,8 @@ from app.models import (
     GetTranscriptRequest,
     TranscriptResponse,
     ChatbotRequest,
-    ChatbotResponse
+    ChatbotResponse,
+    ErrorResponse,
 )
 from app.rag import answer_question, generate_recap
 from app.actions import propose_actions, approve_action, list_actions
@@ -43,11 +49,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Rate limiter (key by IP)
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title="CatchUp API",
-    description="Real-time meeting recap and Q&A with evidence-based answers",
-    version="1.0.0"
+    description="Real-time meeting recap and Q&A with evidence-based answers. All answers include 2-5 evidence quotes from transcripts.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "Health", "description": "Health check and API status"},
+        {"name": "Ingest & Transcript", "description": "Ingest transcript chunks and retrieve full transcript"},
+        {"name": "Q&A & Recap", "description": "Ask questions and generate meeting recap with evidence"},
+        {"name": "Actions", "description": "Propose and approve actions (Notion, Calendar, Email, Slides)"},
+        {"name": "Zoom & Audio", "description": "Zoom webhook and audio upload for transcription"},
+        {"name": "Session", "description": "Session lifecycle (delete)"},
+        {"name": "Notes", "description": "Create, read, update, delete notes"},
+        {"name": "Todos", "description": "Generate and manage todos from meetings"},
+        {"name": "Events", "description": "Generate and manage calendar events"},
+        {"name": "Chatbot", "description": "AI chatbot over all content with evidence"},
+    ],
 )
+
+# Rate limiting (default_limits applied to all routes when enabled)
+_rate_limit = f"{settings.rate_limit_per_minute}/minute" if settings.rate_limit_enabled else "10000/minute"
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware
 app.add_middleware(
@@ -58,10 +86,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------------------
+# Authentication (optional API key)
+# ---------------------------------------------------------------------------
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-@app.get("/")
+
+def verify_api_key(api_key: str = Depends(API_KEY_HEADER)) -> str | None:
+    """If API_KEY is set in config, require valid X-API-Key header. Otherwise allow all."""
+    if not settings.api_key:
+        return None
+    if not api_key or api_key != settings.api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key. Provide X-API-Key header.",
+        )
+    return api_key
+
+
+# ---------------------------------------------------------------------------
+# Global exception handlers (improved error handling)
+# ---------------------------------------------------------------------------
+@app.exception_handler(Exception)
+def unhandled_exception_handler(request, exc: Exception):
+    logger.exception(f"Unhandled error: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "An internal error occurred.", "status_code": 500},
+    )
+
+
+@app.get("/", tags=["Health"])
 def read_root():
-    """Health check endpoint."""
+    """Health check endpoint. No authentication required."""
     return {
         "status": "healthy",
         "service": "CatchUp API",
@@ -69,8 +126,21 @@ def read_root():
     }
 
 
-@app.post("/api/ingest")
-def ingest_transcript(request: IngestTranscriptRequest):
+@app.get("/api/status", tags=["Health"])
+def api_status():
+    """API status and configuration (e.g. rate limit, auth). New endpoint for coordination."""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "rate_limit_enabled": settings.rate_limit_enabled,
+        "rate_limit_per_minute": settings.rate_limit_per_minute,
+        "auth_required": bool(settings.api_key),
+    }
+
+
+@app.post("/api/ingest", tags=["Ingest & Transcript"], responses={500: {"model": ErrorResponse, "description": "Ingest failed"}})
+@limiter.limit(_rate_limit)
+def ingest_transcript(request: IngestTranscriptRequest, _=Depends(verify_api_key)):
     """
     Ingest transcript chunks into the vector store.
     Supports both Zoom and in-person modes.

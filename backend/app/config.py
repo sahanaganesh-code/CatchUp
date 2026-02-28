@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     # API Keys
     gemini_api_key: str
     
+    # API Authentication (optional - leave empty to disable)
+    api_key: Optional[str] = None
+    
+    # Rate limiting
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = 60
+    
     # ChromaDB
     chroma_persist_dir: str = "./chroma_db"
     chroma_collection_name: str = "catchup_transcripts_gemini"
