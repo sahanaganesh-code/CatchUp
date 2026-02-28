@@ -4,8 +4,15 @@ from datetime import datetime
 
 
 # ---------------------------------------------------------------------------
-# API Error Response (for consistent error handling & Swagger docs)
+# API Error Response & Exceptions (for error handling & Swagger)
 # ---------------------------------------------------------------------------
+
+class NotFoundError(Exception):
+    """Raised when a resource (e.g. action, note) is not found. main.py maps to 404."""
+    def __init__(self, message: str = "Resource not found"):
+        self.message = message
+        super().__init__(message)
+
 
 class ErrorResponse(BaseModel):
     """Standard error response for all API errors."""
@@ -27,7 +34,7 @@ class TranscriptChunk(BaseModel):
 class IngestTranscriptRequest(BaseModel):
     """Request to ingest transcript chunks."""
     session_id: str = Field(..., min_length=1, max_length=256, description="Unique session identifier")
-    mode: Literal["zoom", "in-person"] = Field(..., description="Meeting mode")
+    mode: Literal["google_meet", "in-person"] = Field(..., description="Meeting mode: Google Meet or in-person")
     chunks: List[TranscriptChunk] = Field(..., min_length=1, description="List of transcript chunks")
 
 
@@ -64,16 +71,16 @@ class RecapResponse(BaseModel):
 
 
 class ActionType(str):
-    NOTION_TASK = "notion_task"
-    CALENDAR_EVENT = "calendar_event"
-    EMAIL_FOLLOWUP = "email_followup"
-    SLIDES = "slides"
+    GOOGLE_TASKS = "google_tasks"
+    GOOGLE_CALENDAR = "google_calendar"
+    GMAIL_FOLLOWUP = "gmail_followup"
+    GOOGLE_SLIDES = "google_slides"
 
 
 class ProposedAction(BaseModel):
-    """A proposed action from the meeting."""
+    """A proposed action from the meeting (Google: Tasks, Calendar, Gmail, Slides)."""
     action_id: str = Field(..., description="Unique action identifier")
-    action_type: Literal["notion_task", "calendar_event", "email_followup", "slides"]
+    action_type: Literal["google_tasks", "google_calendar", "gmail_followup", "google_slides"]
     title: str = Field(..., description="Action title")
     description: str = Field(..., description="Action description")
     evidence: List[Evidence] = Field(..., description="Supporting evidence")
@@ -112,9 +119,9 @@ class AudioUploadRequest(BaseModel):
     session_id: str = Field(..., description="Session identifier")
 
 
-class ZoomWebhookPayload(BaseModel):
-    """Stub for Zoom RTMS webhook payload."""
-    meeting_id: str
+class GoogleMeetWebhookPayload(BaseModel):
+    """Google Meet live captions / transcript webhook payload (stub for Meet API or Pub/Sub)."""
+    meeting_id: str = Field(..., description="Meet meeting/conference ID or link hash")
     transcript_chunk: TranscriptChunk
 
 

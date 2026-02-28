@@ -61,7 +61,7 @@ def test_ingest_and_query():
         f"{API_URL}/api/ingest",
         json={
             "session_id": session_id,
-            "mode": "zoom",
+            "mode": "google_meet",
             "chunks": chunks
         }
     )

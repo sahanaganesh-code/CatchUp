@@ -68,14 +68,13 @@ def answer_question(session_id: str, question: str) -> QuestionResponse:
 
 Question: {question}
 
-Evidence from transcript:
+Evidence from transcript (use these exact timestamps in your answer):
 {evidence_text}
 
 Instructions:
-1. Answer the question using ONLY the information in the evidence above
-2. Reference specific timestamps when making points
-3. If the evidence doesn't fully answer the question, acknowledge the limitation
-4. Be concise and direct
+1. Answer using ONLY the information in the evidence above. Cite timestamps like [HH:MM:SS] when making points.
+2. If the evidence does not fully answer the question, say so and do not speculate.
+3. Be concise and direct. Prefer 2-5 short sentences with clear timestamp references.
 
 Answer:"""
     
@@ -141,25 +140,28 @@ def generate_recap(session_id: str) -> RecapResponse:
                 speaker=chunk.get("speaker")
             ))
     
-    # Build context from all chunks
+    # Build context from all chunks (use more for better recap)
     context = "\n\n".join([
         f"[{chunk['timestamp']}] {chunk.get('speaker', 'Speaker')}: {chunk['text']}"
-        for chunk in all_chunks[:20]  # Limit context size
+        for chunk in all_chunks[:40]
     ])
     
-    prompt = f"""Summarize this meeting transcript. Provide:
-1. A brief summary (2-3 sentences)
-2. 3-5 key points discussed
+    prompt = f"""Summarize this meeting transcript. You MUST include:
+1. Key decisions made (what was agreed or decided)
+2. Action items identified (who will do what, with dates if mentioned)
+3. Important discussions (main topics and outcomes)
 
 Transcript:
 {context}
 
-Format your response as:
-SUMMARY: <summary>
+Format your response exactly as:
+SUMMARY: <2-4 sentences covering decisions, action items, and main discussion>
 KEY POINTS:
-- <point 1>
+- <decision or action or discussion point 1>
 - <point 2>
 - <point 3>
+- <point 4>
+- <point 5 if applicable>
 """
     
     try:

@@ -89,28 +89,30 @@ def generate_todos_from_meeting(session_id: str) -> List[TodoItem]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this meeting transcript and extract TODO items. For each todo:
-1. Title (brief, actionable)
-2. Description (what needs to be done)
-3. Priority (low/medium/high)
-4. Due date (if mentioned, format: YYYY-MM-DD)
-5. Relevant timestamps from transcript
+    prompt = f"""Analyze this meeting transcript and extract TODO/action items. For each item assign:
+1. title: brief, actionable (verb-first)
+2. description: what needs to be done
+3. priority: low, medium, or high (high = deadlines or "urgent"/"ASAP", low = nice-to-have)
+4. due_date: if mentioned, YYYY-MM-DD
+5. priority_score: integer 1-5 (5 = most urgent, 1 = lowest). Use 3 for medium when unclear.
+6. timestamps: transcript timestamps that support this todo
 
 Transcript:
 {context}
 
-Provide response as JSON array:
+Respond with a JSON array only:
 [
   {{
     "title": "Complete project proposal",
     "description": "Write and submit the Q2 project proposal",
     "priority": "high",
     "due_date": "2024-03-15",
+    "priority_score": 4,
     "timestamps": ["00:01:20", "00:02:30"]
   }}
 ]
 
-Only include concrete action items, not general discussion points.
+Include only concrete action items with clear owners or deadlines when mentioned.
 """
     
     try:
@@ -122,8 +124,8 @@ Only include concrete action items, not general discussion points.
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
         
-        todos_data = json.loads(content)
-        
+        raw = json.loads(content)
+        todos_data = raw if isinstance(raw, list) else [raw]
         todos = []
         for todo_data in todos_data:
             todo_id = str(uuid.uuid4())
@@ -150,11 +152,16 @@ Only include concrete action items, not general discussion points.
                         speaker=chunk.get("speaker")
                     ))
             
+            # Normalize priority from priority_score (1-5) or explicit priority string
+            priority = todo_data.get("priority", "medium")
+            if not priority or priority not in ("low", "medium", "high"):
+                score = todo_data.get("priority_score", 3)
+                priority = "high" if score >= 4 else ("low" if score <= 2 else "medium")
             todo = TodoItem(
                 todo_id=todo_id,
                 title=todo_data["title"],
                 description=todo_data["description"],
-                priority=todo_data.get("priority", "medium"),
+                priority=priority,
                 due_date=todo_data.get("due_date"),
                 evidence=evidence[:settings.max_evidence_quotes]
             )
@@ -186,18 +193,18 @@ def generate_calendar_events(session_id: str) -> List[CalendarEvent]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this meeting transcript and extract calendar events. For each event:
-1. Title (meeting/event name)
-2. Description (purpose/agenda)
-3. Date (if mentioned, format: YYYY-MM-DD)
-4. Time (if mentioned, format: HH:MM in 24-hour)
-5. Duration in minutes (if mentioned)
-6. Relevant timestamps from transcript
+    prompt = f"""Analyze this meeting transcript and extract calendar/scheduled events. For each event include:
+1. title: meeting or event name
+2. description: purpose or agenda
+3. date: YYYY-MM-DD if mentioned
+4. time: HH:MM 24-hour if mentioned
+5. duration_minutes: number if mentioned (e.g. "30 min" -> 30, "1 hour" -> 60)
+6. timestamps: transcript timestamps that mention this event
 
 Transcript:
 {context}
 
-Provide response as JSON array:
+Respond with a JSON array only. Use null for missing date/time/duration:
 [
   {{
     "title": "Kickoff meeting",
@@ -209,7 +216,7 @@ Provide response as JSON array:
   }}
 ]
 
-Only include explicitly mentioned meetings/events with dates or times.
+Include only events that are explicitly scheduled or have a date/time. Skip vague future plans.
 """
     
     try:
@@ -221,8 +228,8 @@ Only include explicitly mentioned meetings/events with dates or times.
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
         
-        events_data = json.loads(content)
-        
+        raw = json.loads(content)
+        events_data = raw if isinstance(raw, list) else [raw]
         events = []
         for event_data in events_data:
             event_id = str(uuid.uuid4())

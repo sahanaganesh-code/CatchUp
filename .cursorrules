@@ -11,17 +11,17 @@
 ### 2. Action Approval Gating
 - **NO actions execute unless `approved=true` is sent from frontend**
 - All proposed actions must be stored in pending state
-- Actions include: Notion tasks, Calendar events, Email follow-ups, Slide generation
+- Actions are Google-focused: Google Tasks, Google Calendar, Gmail follow-ups, Google Slides
 - Backend must validate approval flag before execution
 
 ### 3. Modular Code Structure
 - Keep backend modules separate:
-  - `app/config.py` - Configuration and settings
+  - `app/config.py` - Configuration (Google: Meet, Calendar, Gmail, Drive, Tasks, Docs, Slides)
   - `app/models.py` - Pydantic models
   - `app/store.py` - ChromaDB vector store operations
-  - `app/rag.py` - RAG and Q&A logic
-  - `app/actions.py` - Action proposal and execution
-  - `app/zoom.py` - Zoom/RTMS transcript ingestion
+  - `app/rag.py` - RAG and Q&A logic (Gemini)
+  - `app/actions.py` - Action proposal and execution (Google APIs)
+  - `app/meet.py` - Google Meet transcript ingestion (live captions / webhook)
   - `app/stt.py` - Speech-to-text for in-person mode
 - Frontend: Follow Next.js App Router conventions
 
@@ -37,7 +37,7 @@
 
 - Test evidence extraction returns 2-5 quotes
 - Test action approval gating blocks unapproved actions
-- Test both Zoom and in-person modes
+- Test both Google Meet and in-person modes
 - Validate timestamp formats in evidence
 
 ## Documentation

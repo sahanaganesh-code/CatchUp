@@ -1,13 +1,18 @@
 import chromadb
 from chromadb.config import Settings as ChromaSettings
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 import hashlib
+import time
 from app.config import settings
 from app.models import TranscriptChunk, Evidence
 from app.gemini_client import embed_texts
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Optional in-memory cache for get_all_chunks (reduces ChromaDB load). TTL seconds.
+_chunks_cache: Dict[str, Tuple[List[Dict[str, Any]], float]] = {}
+CHUNKS_CACHE_TTL = 60
 
 
 class VectorStore:
@@ -92,12 +97,15 @@ class VectorStore:
         logger.info(f"Retrieved {len(chunks)} chunks for query in session {session_id}")
         return chunks
     
-    def get_all_chunks(self, session_id: str) -> List[Dict[str, Any]]:
-        """Get all chunks for a session."""
+    def get_all_chunks(self, session_id: str, use_cache: bool = True) -> List[Dict[str, Any]]:
+        """Get all chunks for a session. Uses optional in-memory cache (TTL 60s) when use_cache=True."""
+        if use_cache and session_id in _chunks_cache:
+            cached, ts = _chunks_cache[session_id]
+            if time.time() - ts < CHUNKS_CACHE_TTL:
+                return cached
         results = self.collection.get(
             where={"session_id": session_id}
         )
-        
         chunks = []
         if results["documents"]:
             for i, doc in enumerate(results["documents"]):
@@ -107,9 +115,9 @@ class VectorStore:
                     "timestamp": metadata["timestamp"],
                     "speaker": metadata.get("speaker", "Unknown")
                 })
-        
-        # Sort by timestamp
         chunks.sort(key=lambda x: x["timestamp"])
+        if use_cache:
+            _chunks_cache[session_id] = (chunks, time.time())
         return chunks
     
     def delete_session(self, session_id: str) -> None:
@@ -118,6 +126,24 @@ class VectorStore:
         if results["ids"]:
             self.collection.delete(ids=results["ids"])
             logger.info(f"Deleted session {session_id}")
+        _chunks_cache.pop(session_id, None)
+
+    def list_session_ids(self) -> List[str]:
+        """Return distinct session_ids that have chunks in the collection (for coordination)."""
+        try:
+            # ChromaDB get with no filter returns all; we only need metadatas for session_id
+            data = self.collection.get(include=["metadatas"])
+            if not data or not data.get("metadatas"):
+                return []
+            seen = set()
+            for meta in data["metadatas"]:
+                sid = meta.get("session_id")
+                if sid:
+                    seen.add(sid)
+            return sorted(seen)
+        except Exception as e:
+            logger.warning(f"list_session_ids failed: {e}")
+            return []
 
 
 # Global instance

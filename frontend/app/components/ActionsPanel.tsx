@@ -9,18 +9,26 @@ interface ActionsPanelProps {
   sessionId: string;
 }
 
-const ACTION_ICONS = {
+const ACTION_ICONS: Record<string, string> = {
+  google_tasks: "📝",
+  google_calendar: "📅",
+  gmail_followup: "✉️",
+  google_slides: "📊",
   notion_task: "📝",
   calendar_event: "📅",
   email_followup: "✉️",
   slides: "📊",
 };
 
-const ACTION_LABELS = {
-  notion_task: "Notion Task",
-  calendar_event: "Calendar Event",
-  email_followup: "Email Follow-up",
-  slides: "Slides",
+const ACTION_LABELS: Record<string, string> = {
+  google_tasks: "Google Tasks",
+  google_calendar: "Google Calendar",
+  gmail_followup: "Gmail Follow-up",
+  google_slides: "Google Slides",
+  notion_task: "Google Tasks",
+  calendar_event: "Google Calendar",
+  email_followup: "Gmail Follow-up",
+  slides: "Google Slides",
 };
 
 export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
@@ -101,7 +109,7 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-start flex-1">
                   <span className="text-2xl mr-3">
-                    {ACTION_ICONS[action.action_type]}
+                    {ACTION_ICONS[action.action_type] ?? "📌"}
                   </span>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
@@ -109,7 +117,7 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
                         {action.title}
                       </h3>
                       <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                        {ACTION_LABELS[action.action_type]}
+                        {ACTION_LABELS[action.action_type] ?? "Action"}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600 mb-2">

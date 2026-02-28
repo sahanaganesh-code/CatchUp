@@ -28,7 +28,7 @@ export interface RecapResponse {
 
 export interface ProposedAction {
   action_id: string;
-  action_type: "notion_task" | "calendar_event" | "email_followup" | "slides";
+  action_type: "google_tasks" | "google_calendar" | "gmail_followup" | "google_slides";
   title: string;
   description: string;
   evidence: Evidence[];
@@ -80,7 +80,7 @@ export interface ChatbotResponse {
 export const api = {
   async ingestTranscript(
     sessionId: string,
-    mode: "zoom" | "in-person",
+    mode: "google_meet" | "in-person",
     chunks: TranscriptChunk[]
   ) {
     const response = await axios.post(`${API_URL}/api/ingest`, {

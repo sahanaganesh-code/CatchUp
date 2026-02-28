@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 from app.config import settings
-from app.models import ProposedAction, Evidence, ApproveActionResponse
+from app.models import ProposedAction, Evidence, ApproveActionResponse, NotFoundError
 from app.store import vector_store
 from app.gemini_client import generate_text
 import logging
@@ -11,6 +11,21 @@ logger = logging.getLogger(__name__)
 
 # In-memory store for proposed actions (in production, use a database)
 actions_store: Dict[str, ProposedAction] = {}
+
+GOOGLE_ACTION_TYPES = ("google_tasks", "google_calendar", "gmail_followup", "google_slides")
+LEGACY_TO_GOOGLE = {
+    "notion_task": "google_tasks",
+    "calendar_event": "google_calendar",
+    "email_followup": "gmail_followup",
+    "slides": "google_slides",
+}
+
+
+def _normalize_action_type(raw: str) -> str:
+    """Normalize action type to Google product (supports legacy notion_task etc.)."""
+    if raw in GOOGLE_ACTION_TYPES:
+        return raw
+    return LEGACY_TO_GOOGLE.get(raw, "google_tasks")
 
 
 def propose_actions(session_id: str) -> List[ProposedAction]:
@@ -33,8 +48,8 @@ def propose_actions(session_id: str) -> List[ProposedAction]:
         for chunk in all_chunks[:30]  # Limit context
     ])
     
-    prompt = f"""Analyze this meeting transcript and propose actionable items. For each action, identify:
-1. Action type (notion_task, calendar_event, email_followup, or slides)
+    prompt = f"""Analyze this meeting transcript and propose actionable items using Google products. For each action, identify:
+1. Action type: google_tasks (task/list), google_calendar (event), gmail_followup (email), or google_slides (presentation)
 2. Title
 3. Description
 4. Relevant timestamps from the transcript
@@ -45,7 +60,7 @@ Transcript:
 Provide your response as a JSON array of actions with this structure:
 [
   {{
-    "action_type": "notion_task",
+    "action_type": "google_tasks",
     "title": "Action title",
     "description": "Detailed description",
     "timestamps": ["HH:MM:SS", "HH:MM:SS"],
@@ -53,7 +68,7 @@ Provide your response as a JSON array of actions with this structure:
   }}
 ]
 
-Focus on concrete, actionable items mentioned in the meeting.
+Use only these action_type values: google_tasks, google_calendar, gmail_followup, google_slides. Focus on concrete, actionable items.
 """
     
     try:
@@ -97,9 +112,11 @@ Focus on concrete, actionable items mentioned in the meeting.
                         speaker=chunk.get("speaker")
                     ))
             
+            raw_type = action_data.get("action_type", "google_tasks")
+            action_type = _normalize_action_type(raw_type)
             action = ProposedAction(
                 action_id=action_id,
-                action_type=action_data["action_type"],
+                action_type=action_type,
                 title=action_data["title"],
                 description=action_data["description"],
                 evidence=evidence[:settings.max_evidence_quotes],
@@ -128,12 +145,7 @@ def approve_action(action_id: str, approved: bool) -> ApproveActionResponse:
     logger.info(f"Processing approval for action {action_id}: approved={approved}")
     
     if action_id not in actions_store:
-        return ApproveActionResponse(
-            action_id=action_id,
-            approved=False,
-            executed=False,
-            message="Action not found"
-        )
+        raise NotFoundError("Action not found")
     
     action = actions_store[action_id]
     action.approved = approved
@@ -167,30 +179,30 @@ def execute_action(action: ProposedAction) -> bool:
     logger.info(f"Executing action {action.action_id} of type {action.action_type}")
     
     try:
-        if action.action_type == "notion_task":
-            # Stub: In production, integrate with Notion API
-            logger.info(f"[STUB] Creating Notion task: {action.title}")
+        if action.action_type == "google_tasks":
+            # Stub: Google Tasks API
+            logger.info(f"[STUB] Creating Google Task: {action.title}")
             logger.info(f"[STUB] Task details: {action.description}")
             return True
-        
-        elif action.action_type == "calendar_event":
-            # Stub: In production, integrate with Google Calendar API
-            logger.info(f"[STUB] Creating calendar event: {action.title}")
+
+        elif action.action_type == "google_calendar":
+            # Stub: Google Calendar API
+            logger.info(f"[STUB] Creating Google Calendar event: {action.title}")
             logger.info(f"[STUB] Event details: {action.description}")
             return True
-        
-        elif action.action_type == "email_followup":
-            # Stub: In production, integrate with email API
-            logger.info(f"[STUB] Sending email follow-up: {action.title}")
+
+        elif action.action_type == "gmail_followup":
+            # Stub: Gmail API
+            logger.info(f"[STUB] Sending Gmail follow-up: {action.title}")
             logger.info(f"[STUB] Email content: {action.description}")
             return True
-        
-        elif action.action_type == "slides":
-            # Stub: In production, integrate with Google Slides API
-            logger.info(f"[STUB] Generating slides: {action.title}")
+
+        elif action.action_type == "google_slides":
+            # Stub: Google Slides API
+            logger.info(f"[STUB] Creating Google Slides: {action.title}")
             logger.info(f"[STUB] Slide content: {action.description}")
             return True
-        
+
         else:
             logger.warning(f"Unknown action type: {action.action_type}")
             return False

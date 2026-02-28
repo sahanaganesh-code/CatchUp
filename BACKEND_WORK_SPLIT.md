@@ -13,7 +13,7 @@
 | `store.py` | 124 | Medium | Database |
 | `stt.py` | 104 | Medium | Audio |
 | `gemini_client.py` | 77 | Medium | AI Client |
-| `zoom.py` | 62 | Low | Zoom Stub |
+| `meet.py` | 62 | Low | Google Meet stub |
 | `config.py` | 33 | Low | Config |
 
 **Total:** 1,920 lines
@@ -53,9 +53,9 @@
 **Focus:** Database, storage, external integrations, data flow
 
 **Primary Files (290 lines):**
-- ✅ `store.py` (124 lines) - ChromaDB vector store
-- ✅ `zoom.py` (62 lines) - Zoom RTMS integration
-- ✅ `stt.py` (104 lines) - Speech-to-text
+- ✅ `store.py` (124 lines) - ChromaDB vector store (with list_session_ids, chunks cache)
+- ✅ `meet.py` (62 lines) - Google Meet transcript ingestion (webhook verification ready)
+- ✅ `stt.py` (104 lines) - Speech-to-text (Gemini/Whisper path ready)
 
 **Secondary Files (Read/Coordinate):**
 - 📖 `models.py` - Read data models
@@ -63,11 +63,11 @@
 - 📖 `config.py` - Read configuration
 
 **Tasks:**
-- Implement real Zoom RTMS integration
-- Implement real STT (Whisper/Gemini)
+- Implement real Google Meet / live captions integration
+- Implement real STT (Whisper or Gemini audio)
 - Optimize ChromaDB queries
-- Add data persistence
-- Add caching layer
+- Add data persistence for notes/todos
+- Add caching layer (chunks cache in store)
 - Database migrations
 
 **Why this person:**
@@ -149,33 +149,31 @@ def generate_recap(chunks):
 ### Person 2: Data & Integration Engineer
 
 #### Week 1 Tasks
-- [ ] Implement real Zoom RTMS in `zoom.py`
-- [ ] Implement Whisper STT in `stt.py`
-- [ ] Optimize ChromaDB indexing in `store.py`
+- [ ] Implement real Google Meet / live captions in `meet.py`
+- [ ] Implement Whisper or Gemini audio STT in `stt.py`
+- [ ] Optimize ChromaDB indexing in `store.py` (list_session_ids, cache in place)
 - [ ] Add data persistence for notes/todos
-- [ ] Add caching for frequent queries
+- [ ] Add caching for frequent queries (chunks cache in store)
 
 #### Files to Edit
 ```
 backend/app/store.py
-backend/app/zoom.py
+backend/app/meet.py
 backend/app/stt.py
 ```
 
 #### Example Changes
 ```python
-# zoom.py - Real Zoom integration
-import zoomus
-
-def connect_to_zoom_rtms(meeting_id: str):
-    # Real Zoom RTMS connection
-    client = zoomus.ZoomClient(API_KEY, API_SECRET)
-    transcript_stream = client.get_live_transcript(meeting_id)
-    return transcript_stream
+# meet.py - Real Google Meet integration
+# Use Meet recording → Drive/YouTube transcript, or Pub/Sub for live captions
+def process_meet_webhook(payload: GoogleMeetWebhookPayload) -> bool:
+    if settings.google_meet_webhook_secret and not verify_meet_webhook_signature(...):
+        return False
+    # Ingest transcript chunk...
 ```
 
 #### Branch Naming
-- `data/zoom-integration`
+- `data/meet-integration`
 - `data/stt-whisper`
 - `data/optimize-storage`
 
@@ -239,7 +237,7 @@ async def upload_transcript(
 
 **❌ Don't Touch:**
 - `store.py` - Person 2's territory
-- `zoom.py` - Person 2's territory
+- `meet.py` - Person 2's territory
 - `stt.py` - Person 2's territory
 
 ---
@@ -247,7 +245,7 @@ async def upload_transcript(
 ### Person 2 (Data Engineer)
 **✅ Can Edit Freely:**
 - `store.py` - Full ownership
-- `zoom.py` - Full ownership
+- `meet.py` - Full ownership
 - `stt.py` - Full ownership
 
 **🤝 Must Coordinate:**
@@ -278,7 +276,7 @@ async def upload_transcript(
 - `chatbot.py` - Person 1's territory
 - `content_manager.py` - Person 1's territory
 - `store.py` - Person 2's territory
-- `zoom.py` - Person 2's territory
+- `meet.py` - Person 2's territory
 - `stt.py` - Person 2's territory
 - `gemini_client.py` - Person 1's territory
 
@@ -329,11 +327,11 @@ git commit -m "AI: Improve RAG prompts and accuracy"
 git push origin ai/improve-rag
 
 # Person 2
-git checkout -b data/zoom-integration
-# Edit zoom.py, stt.py
-git add backend/app/zoom.py backend/app/stt.py
-git commit -m "Data: Add real Zoom RTMS integration"
-git push origin data/zoom-integration
+git checkout -b data/meet-integration
+# Edit meet.py, stt.py
+git add backend/app/meet.py backend/app/stt.py
+git commit -m "Data: Add real Google Meet integration"
+git push origin data/meet-integration
 
 # Person 3
 git checkout -b api/add-auth
@@ -380,7 +378,7 @@ git push origin api/add-auth
 - No work needed initially
 
 **Person 2 (Data):**
-- Implement WebSocket in `zoom.py`
+- Implement WebSocket in `meet.py`
 - Stream transcript chunks to backend
 
 **Person 3 (API):**
@@ -428,7 +426,7 @@ git push origin api/add-auth
 - **Person 2:** Medium complexity - Integration work (30 hours)
 - **Person 3:** High complexity - API orchestration (40 hours)
 
-**Note:** Person 2 has fewer lines but high-value integration work (Zoom, STT). Person 3 has coordination overhead.
+**Note:** Person 2 has fewer lines but high-value integration work (Google Meet, STT). Person 3 has coordination overhead.
 
 ---
 
@@ -455,7 +453,7 @@ git checkout -b data/integrations
 
 # Your files
 code backend/app/store.py
-code backend/app/zoom.py
+code backend/app/meet.py
 code backend/app/stt.py
 
 # Start building real integrations!
@@ -528,7 +526,7 @@ git push
 | Person | Primary Files | Focus Area | Branch Prefix |
 |--------|--------------|------------|---------------|
 | Person 1 | rag.py, chatbot.py, content_manager.py, gemini_client.py | AI/ML | `ai/` |
-| Person 2 | store.py, zoom.py, stt.py | Data/Integration | `data/` |
+| Person 2 | store.py, meet.py, stt.py | Data/Integration | `data/` |
 | Person 3 | main.py, actions.py, models.py, config.py | API/Orchestration | `api/` |
 
 **Golden Rule:** Own your files, coordinate on shared files, communicate always! 🎉

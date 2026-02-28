@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { Video, Mic } from "lucide-react";
-import ZoomMode from "./components/ZoomMode";
+import MeetMode from "./components/MeetMode";
 import InPersonMode from "./components/InPersonMode";
 import AIChatbot from "./components/AIChatbot";
 
 export default function Home() {
-  const [mode, setMode] = useState<"zoom" | "in-person" | null>(null);
+  const [mode, setMode] = useState<"google_meet" | "in-person" | null>(null);
 
-  if (mode === "zoom") {
-    return <ZoomMode onBack={() => setMode(null)} />;
+  if (mode === "google_meet") {
+    return <MeetMode onBack={() => setMode(null)} />;
   }
 
   if (mode === "in-person") {
@@ -33,30 +33,32 @@ export default function Home() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Zoom Mode */}
+          {/* Google Meet Mode */}
           <button
-            onClick={() => setMode("zoom")}
-            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-blue-500 text-left"
+            type="button"
+            onClick={() => setMode("google_meet")}
+            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-red-500 text-left cursor-pointer"
           >
-            <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-6">
-              <Video className="w-8 h-8 text-blue-600" />
+            <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-6">
+              <Video className="w-8 h-8 text-red-600" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Zoom Meeting Mode
+              Google Meet Mode
             </h2>
             <p className="text-gray-600 mb-4">
-              Real-time captions and transcripts for remote work, online classes, 
-              and telehealth appointments. Perfect for hearing accessibility.
+              Live captions and transcripts from Google Meet. Integrates with 
+              Google Calendar, Tasks, Gmail, and Slides. Built on Gemini.
             </p>
-            <div className="flex items-center text-sm text-blue-600 font-medium">
+            <div className="flex items-center text-sm text-red-600 font-medium">
               Get Started →
             </div>
           </button>
 
           {/* In-Person Mode */}
           <button
+            type="button"
             onClick={() => setMode("in-person")}
-            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-green-500 text-left"
+            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-green-500 text-left cursor-pointer"
           >
             <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
               <Mic className="w-8 h-8 text-green-600" />

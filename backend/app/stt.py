@@ -1,14 +1,26 @@
 """
-Speech-to-Text (STT) service for in-person lecture mode.
-This is a stub - in production, integrate with OpenAI Whisper API or similar.
+Speech-to-Text (STT) for in-person mode.
+Supports stub (mock), and optional Gemini audio when configured (Gemini 1.5 can ingest audio).
+In production: Whisper API or Gemini audio.
 """
-from typing import List
+from typing import List, Optional
 from app.models import TranscriptChunk
 from app.store import vector_store
+from app.config import settings
 import logging
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+def transcribe_audio_gemini(session_id: str, audio_data: bytes, mime_type: str = "audio/wav") -> List[TranscriptChunk]:
+    """
+    Transcribe audio using Gemini (when available). Gemini 1.5 Flash/Pro support audio input.
+    Stub: returns mock chunks; in production use genai.upload_file + model.generate_content with audio part.
+    """
+    logger.info(f"[STUB] Gemini STT for session {session_id} ({len(audio_data)} bytes)")
+    # In production: upload audio to Gemini, get transcript with timestamps
+    return transcribe_audio(session_id, f"gemini_audio_{session_id}")
 
 
 def transcribe_audio(session_id: str, audio_file_path: str) -> List[TranscriptChunk]:
@@ -52,31 +64,24 @@ def transcribe_audio(session_id: str, audio_file_path: str) -> List[TranscriptCh
         return []
 
 
-def process_audio_upload(session_id: str, audio_data: bytes) -> bool:
+def process_audio_upload(session_id: str, audio_data: bytes, use_gemini: bool = False) -> bool:
     """
-    Process uploaded audio file and add transcript to vector store.
-    This is a stub - in production, handle file upload and transcription.
+    Process uploaded audio and add transcript to vector store.
+    If use_gemini True and Gemini supports audio, use transcribe_audio_gemini; else stub/Whisper path.
     """
-    logger.info(f"[STUB] Processing audio upload for session {session_id}")
+    logger.info(f"[STUB] Processing audio upload for session {session_id} (use_gemini={use_gemini})")
     
     try:
-        # In production:
-        # 1. Save audio file temporarily
-        # 2. Validate audio format
-        # 3. Call transcribe_audio()
-        # 4. Add chunks to vector store
-        # 5. Clean up temporary file
-        
-        # Stub: Generate mock transcript
-        chunks = transcribe_audio(session_id, f"[stub_audio_{session_id}]")
+        if use_gemini and audio_data:
+            chunks = transcribe_audio_gemini(session_id, audio_data)
+        else:
+            chunks = transcribe_audio(session_id, f"[stub_audio_{session_id}]")
         
         if chunks:
             vector_store.add_chunks(session_id=session_id, chunks=chunks)
             logger.info(f"[STUB] Added {len(chunks)} STT chunks to vector store")
             return True
-        
         return False
-    
     except Exception as e:
         logger.error(f"Error processing audio upload: {e}")
         return False
