@@ -27,16 +27,16 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-[#2e6a4f] rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <FileText className="w-5 h-5 text-blue-600 mr-2" />
-          <h2 className="text-xl font-bold text-gray-900">CatchUp Recap</h2>
+          <FileText className="w-5 h-5 text-green-200 mr-2" />
+          <h2 className="text-xl font-bold text-white">CatchUp Recap</h2>
         </div>
         <button
           onClick={handleGenerateRecap}
           disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 flex items-center"
+          className="bg-[#256055] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1e5249] disabled:bg-gray-500 flex items-center"
         >
           {loading ? (
             <>
@@ -50,7 +50,7 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
       </div>
 
       {recap ? (
-        <div className="space-y-4">
+        <div className="space-y-4 bg-white rounded-lg p-4">
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-2">
               Summary
@@ -66,7 +66,7 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
               <ul className="space-y-2">
                 {recap.key_points.map((point, index) => (
                   <li key={index} className="flex items-start">
-                    <span className="text-blue-600 mr-2">•</span>
+                    <span className="text-[#2e6a4f] mr-2">•</span>
                     <span className="text-gray-800">{point}</span>
                   </li>
                 ))}
@@ -77,7 +77,7 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
           <EvidenceList evidence={recap.evidence} />
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-8">
+        <p className="text-green-100 text-center py-8">
           Click "Generate Recap" to get a summary of the meeting
         </p>
       )}

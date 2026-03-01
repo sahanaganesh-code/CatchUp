@@ -62,15 +62,15 @@ export default function NotesPanel({ sessionId }: NotesPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-[#2e6a4f] rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <StickyNote className="w-5 h-5 text-yellow-600 mr-2" />
-          <h2 className="text-xl font-bold text-gray-900">Live Notes</h2>
+          <StickyNote className="w-5 h-5 text-green-200 mr-2" />
+          <h2 className="text-xl font-bold text-white">Live Notes</h2>
         </div>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-yellow-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-yellow-700 flex items-center"
+          className="bg-[#256055] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1e5249] flex items-center"
         >
           <Plus className="w-4 h-4 mr-2" />
           New Note
@@ -79,31 +79,31 @@ export default function NotesPanel({ sessionId }: NotesPanelProps) {
 
       {/* Create Note Form */}
       {showCreateForm && (
-        <div className="mb-4 border border-yellow-200 rounded-lg p-4 bg-yellow-50">
+        <div className="mb-4 border border-green-600 rounded-lg p-4 bg-white">
           <input
             type="text"
             value={newNoteTitle}
             onChange={(e) => setNewNoteTitle(e.target.value)}
             placeholder="Note title..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
           />
           <textarea
             value={newNoteContent}
             onChange={(e) => setNewNoteContent(e.target.value)}
             placeholder="Note content..."
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
           />
           <div className="flex items-center gap-2">
             <input
               type="date"
               value={newNoteDate}
               onChange={(e) => setNewNoteDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
             <button
               onClick={handleCreateNote}
-              className="bg-yellow-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-yellow-700 flex items-center"
+              className="bg-[#256055] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1e5249] flex items-center"
             >
               <Save className="w-4 h-4 mr-2" />
               Save Note
@@ -121,14 +121,14 @@ export default function NotesPanel({ sessionId }: NotesPanelProps) {
       {/* Notes List */}
       <div className="space-y-3 max-h-96 overflow-y-auto">
         {notes.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
+          <p className="text-green-100 text-center py-8">
             No notes yet. Click "New Note" to create one.
           </p>
         ) : (
           notes.map((note) => (
             <div
               key={note.note_id}
-              className="border border-yellow-200 rounded-lg p-4 bg-yellow-50"
+              className="border border-green-600 rounded-lg p-4 bg-white"
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">

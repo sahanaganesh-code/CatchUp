@@ -71,18 +71,18 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-[#2e6a4f] rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <Zap className="w-5 h-5 text-purple-600 mr-2" />
-          <h2 className="text-xl font-bold text-gray-900">
+          <Zap className="w-5 h-5 text-green-200 mr-2" />
+          <h2 className="text-xl font-bold text-white">
             FlowPilot Actions
           </h2>
         </div>
         <button
           onClick={handleProposeActions}
           disabled={loading}
-          className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 flex items-center"
+          className="bg-[#256055] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1e5249] disabled:bg-gray-500 flex items-center"
         >
           {loading ? (
             <>
@@ -97,14 +97,14 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
 
       <div className="space-y-4">
         {actions.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
+          <p className="text-green-100 text-center py-8">
             Click "Propose Actions" to generate action items
           </p>
         ) : (
           actions.map((action) => (
             <div
               key={action.action_id}
-              className="border border-gray-200 rounded-lg p-4 hover:border-purple-300 transition-colors"
+              className="border border-green-600 rounded-lg p-4 bg-white hover:border-[#256055] transition-colors"
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-start flex-1">
@@ -116,7 +116,7 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
                       <h3 className="font-semibold text-gray-900">
                         {action.title}
                       </h3>
-                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                      <span className="text-xs bg-green-100 text-[#2e6a4f] px-2 py-1 rounded">
                         {ACTION_LABELS[action.action_type] ?? "Action"}
                       </span>
                     </div>
@@ -133,7 +133,7 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
                             : action.action_id
                         )
                       }
-                      className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                      className="text-xs text-[#2e6a4f] hover:text-[#1e5249] font-medium"
                     >
                       {expandedAction === action.action_id
                         ? "Hide Evidence"
@@ -162,7 +162,7 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={() => handleApproveAction(action.action_id, true)}
-                    className="flex-1 bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 flex items-center justify-center"
+                    className="flex-1 bg-[#256055] text-white py-2 rounded-lg font-medium hover:bg-[#1e5249] flex items-center justify-center"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Approve & Execute
@@ -191,8 +191,8 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
         )}
       </div>
 
-      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <p className="text-xs text-yellow-800">
+      <div className="mt-4 p-3 bg-white/20 border border-green-400 rounded-lg">
+        <p className="text-xs text-green-100">
           ⚠️ <strong>Approval Required:</strong> Actions will only execute
           after you approve them. No action runs automatically.
         </p>

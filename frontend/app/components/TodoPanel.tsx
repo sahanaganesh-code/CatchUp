@@ -63,13 +63,13 @@ export default function TodoPanel({ sessionId }: TodoPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-[#2e6a4f] rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-900">Auto-Generated Todos</h2>
+        <h2 className="text-xl font-bold text-white">Auto-Generated Todos</h2>
         <button
           onClick={handleGenerateTodos}
           disabled={loading}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-300 flex items-center"
+          className="bg-[#256055] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1e5249] disabled:bg-gray-500 flex items-center"
         >
           {loading ? (
             <>
@@ -84,15 +84,15 @@ export default function TodoPanel({ sessionId }: TodoPanelProps) {
 
       <div className="space-y-3">
         {todos.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
+          <p className="text-green-100 text-center py-8">
             Click "Generate Todos" to extract action items from the meeting
           </p>
         ) : (
           todos.map((todo) => (
             <div
               key={todo.todo_id}
-              className={`border rounded-lg p-4 ${
-                todo.completed ? "bg-gray-50 opacity-75" : "bg-white"
+              className={`border border-green-600 rounded-lg p-4 ${
+                todo.completed ? "bg-gray-100 opacity-75" : "bg-white"
               }`}
             >
               <div className="flex items-start gap-3">
@@ -155,7 +155,7 @@ export default function TodoPanel({ sessionId }: TodoPanelProps) {
                           expandedTodo === todo.todo_id ? null : todo.todo_id
                         )
                       }
-                      className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                      className="text-xs text-[#2e6a4f] hover:text-[#1e5249] font-medium"
                     >
                       {expandedTodo === todo.todo_id
                         ? "Hide Evidence"

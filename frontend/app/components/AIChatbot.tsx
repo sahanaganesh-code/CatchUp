@@ -55,7 +55,7 @@ export default function AIChatbot() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50"
+        className="fixed bottom-6 right-6 bg-[#2e6a4f] text-white p-4 rounded-full shadow-lg hover:bg-[#256055] hover:shadow-xl transition-all z-50"
       >
         <Bot className="w-6 h-6" />
       </button>
@@ -65,7 +65,7 @@ export default function AIChatbot() {
   return (
     <div className="fixed bottom-6 right-6 w-96 h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border border-gray-200">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-t-2xl flex items-center justify-between">
+      <div className="bg-[#2e6a4f] text-white p-4 rounded-t-2xl flex items-center justify-between">
         <div className="flex items-center">
           <Bot className="w-5 h-5 mr-2" />
           <h3 className="font-bold">AI Assistant</h3>
@@ -96,7 +96,7 @@ export default function AIChatbot() {
             <div key={index}>
               {msg.type === "user" ? (
                 <div className="flex justify-end">
-                  <div className="bg-blue-600 text-white px-4 py-2 rounded-2xl rounded-tr-sm max-w-[80%]">
+                  <div className="bg-[#2e6a4f] text-white px-4 py-2 rounded-2xl rounded-tr-sm max-w-[80%]">
                     {msg.content}
                   </div>
                 </div>
@@ -143,13 +143,13 @@ export default function AIChatbot() {
               if (e.key === "Enter" && !loading) handleSend();
             }}
             placeholder="Ask about meetings, notes, todos..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2e6a4f] focus:border-transparent"
             disabled={loading}
           />
           <button
             onClick={handleSend}
             disabled={loading || !input.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+            className="bg-[#2e6a4f] text-white px-4 py-2 rounded-lg hover:bg-[#256055] disabled:bg-gray-300"
           >
             <Send className="w-4 h-4" />
           </button>

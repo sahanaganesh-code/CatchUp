@@ -37,13 +37,13 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-[#2e6a4f] rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-900">Calendar Events</h2>
+        <h2 className="text-xl font-bold text-white">Calendar Events</h2>
         <button
           onClick={handleGenerateEvents}
           disabled={loading}
-          className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 flex items-center"
+          className="bg-[#256055] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1e5249] disabled:bg-gray-500 flex items-center"
         >
           {loading ? (
             <>
@@ -58,19 +58,19 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
 
       <div className="space-y-3">
         {events.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
+          <p className="text-green-100 text-center py-8">
             Click "Extract Events" to find calendar events mentioned in the meeting
           </p>
         ) : (
           events.map((event) => (
             <div
               key={event.event_id}
-              className="border border-purple-200 rounded-lg p-4 hover:border-purple-300"
+              className="border border-green-600 rounded-lg p-4 bg-white hover:border-[#256055]"
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <Calendar className="w-4 h-4 text-purple-600" />
+                    <Calendar className="w-4 h-4 text-[#2e6a4f]" />
                     <h3 className="font-semibold text-gray-900">
                       {event.title}
                     </h3>
@@ -81,17 +81,17 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
 
                   <div className="flex flex-wrap gap-2 text-xs">
                     {event.date && (
-                      <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded">
+                      <span className="bg-green-50 text-[#2e6a4f] px-2 py-1 rounded">
                         📅 {event.date}
                       </span>
                     )}
                     {event.time && (
-                      <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded">
+                      <span className="bg-green-50 text-[#2e6a4f] px-2 py-1 rounded">
                         🕐 {event.time}
                       </span>
                     )}
                     {event.duration_minutes && (
-                      <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded">
+                      <span className="bg-green-50 text-[#2e6a4f] px-2 py-1 rounded">
                         ⏱️ {event.duration_minutes} min
                       </span>
                     )}
@@ -114,7 +114,7 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
                       expandedEvent === event.event_id ? null : event.event_id
                     )
                   }
-                  className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                  className="text-xs text-[#2e6a4f] hover:text-[#1e5249] font-medium"
                 >
                   {expandedEvent === event.event_id
                     ? "Hide Evidence"

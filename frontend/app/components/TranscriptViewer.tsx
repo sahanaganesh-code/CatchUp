@@ -42,17 +42,17 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-[#2e6a4f] rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <FileText className="w-5 h-5 text-indigo-600 mr-2" />
-          <h2 className="text-xl font-bold text-gray-900">Full Transcript</h2>
+          <FileText className="w-5 h-5 text-green-200 mr-2" />
+          <h2 className="text-xl font-bold text-white">Full Transcript</h2>
         </div>
         <div className="flex gap-2">
           {transcript.length > 0 && (
             <button
               onClick={exportTranscript}
-              className="flex items-center text-indigo-600 hover:text-indigo-700 font-medium"
+              className="flex items-center text-green-200 hover:text-white font-medium"
             >
               <Download className="w-4 h-4 mr-2" />
               Export
@@ -61,7 +61,7 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
           <button
             onClick={loadTranscript}
             disabled={loading}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-300 flex items-center"
+            className="bg-[#256055] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#1e5249] disabled:bg-gray-500 flex items-center"
           >
             {loading ? (
               <>
@@ -76,21 +76,21 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
       </div>
 
       {transcript.length > 0 && (
-        <div className="mb-3 text-sm text-gray-600">
+        <div className="mb-3 text-sm text-green-100">
           Duration: {totalDuration} • {transcript.length} segments
         </div>
       )}
 
-      <div className="max-h-96 overflow-y-auto space-y-3">
+      <div className="max-h-96 overflow-y-auto space-y-3 bg-white rounded-lg p-4">
         {transcript.length === 0 ? (
           <p className="text-gray-500 text-center py-8">
             Click "Load Transcript" to view the full meeting transcript
           </p>
         ) : (
           transcript.map((chunk, index) => (
-            <div key={index} className="border-l-4 border-indigo-200 pl-4 py-2">
+            <div key={index} className="border-l-4 border-[#2e6a4f] pl-4 py-2">
               <div className="flex items-start gap-3">
-                <span className="font-mono text-xs text-indigo-600 font-semibold whitespace-nowrap">
+                <span className="font-mono text-xs text-[#2e6a4f] font-semibold whitespace-nowrap">
                   [{chunk.timestamp}]
                 </span>
                 <div className="flex-1">

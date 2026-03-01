@@ -38,10 +38,10 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-[#2e6a4f] rounded-xl shadow-lg p-6">
       <div className="flex items-center mb-4">
-        <MessageCircle className="w-5 h-5 text-green-600 mr-2" />
-        <h2 className="text-xl font-bold text-gray-900">Grounded Q&A</h2>
+        <MessageCircle className="w-5 h-5 text-green-200 mr-2" />
+        <h2 className="text-xl font-bold text-white">Grounded Q&A</h2>
       </div>
 
       {/* Question Input */}
@@ -52,7 +52,7 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Ask a question about the meeting..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-green-600 bg-white text-gray-900 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-300 focus:border-transparent"
             onKeyPress={(e) => {
               if (e.key === "Enter" && !loading) handleAskQuestion();
             }}
@@ -61,7 +61,7 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
           <button
             onClick={handleAskQuestion}
             disabled={loading || !question.trim()}
-            className="bg-green-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 flex items-center"
+            className="bg-[#256055] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#1e5249] disabled:bg-gray-500 flex items-center"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -70,20 +70,20 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
             )}
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-green-100 mt-2">
           All answers include 2-5 evidence quotes with timestamps
         </p>
       </div>
 
       {/* Q&A History */}
-      <div className="space-y-6 max-h-96 overflow-y-auto">
+      <div className="space-y-6 max-h-96 overflow-y-auto bg-white rounded-lg p-4">
         {qaHistory.length === 0 ? (
           <p className="text-gray-500 text-center py-8">
             Ask a question to get started
           </p>
         ) : (
           qaHistory.map((item, index) => (
-            <div key={index} className="border-b pb-4 last:border-b-0">
+            <div key={index} className="border-b border-gray-200 pb-4 last:border-b-0">
               <div className="mb-3">
                 <p className="font-semibold text-gray-900 mb-2">
                   Q: {item.question}
