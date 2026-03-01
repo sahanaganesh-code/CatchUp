@@ -9,18 +9,30 @@ interface RecapPanelProps {
   sessionId: string;
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { detail?: string; error?: string } } };
+  const data = err?.response?.data;
+  if (data?.detail && typeof data.detail === "string") return data.detail;
+  if (data?.error && typeof data.error === "string") return data.error;
+  return fallback;
+}
+
 export default function RecapPanel({ sessionId }: RecapPanelProps) {
   const [recap, setRecap] = useState<RecapResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleGenerateRecap = async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const response = await api.getRecap(sessionId);
       setRecap(response);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error generating recap:", error);
-      alert("Error generating recap");
+      const msg = getErrorMessage(error, "Error generating recap.");
+      setErrorMessage(msg);
+      alert(msg);
     } finally {
       setLoading(false);
     }
@@ -51,12 +63,14 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
 
       {recap ? (
         <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">
-              Summary
-            </h3>
-            <p className="text-gray-800">{recap.summary}</p>
-          </div>
+          {recap.summary && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                Summary
+              </h3>
+              <p className="text-gray-800 whitespace-pre-line">{recap.summary}</p>
+            </div>
+          )}
 
           {recap.key_points.length > 0 && (
             <div>
@@ -74,12 +88,21 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
             </div>
           )}
 
-          <EvidenceList evidence={recap.evidence} />
+          {recap.evidence && recap.evidence.length > 0 && (
+            <EvidenceList evidence={recap.evidence} />
+          )}
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-8">
-          Click "Generate Recap" to get a summary of the meeting
-        </p>
+        <div className="space-y-4">
+          {errorMessage && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 text-sm">
+              {errorMessage}
+            </div>
+          )}
+          <p className="text-gray-500 text-center py-8">
+            Click "Generate Recap" to get a summary of the meeting
+          </p>
+        </div>
       )}
     </div>
   );

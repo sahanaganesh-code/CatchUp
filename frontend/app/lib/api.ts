@@ -1,6 +1,9 @@
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// In browser: same-origin proxy /api/backend -> no CORS. On server: call backend directly.
+const isBrowser = typeof window !== "undefined";
+const API_BASE = isBrowser ? "" : (process.env.BACKEND_URL || "http://127.0.0.1:8000");
+const API_PREFIX = isBrowser ? "/api/backend" : "/api";
 
 export interface TranscriptChunk {
   timestamp: string;
@@ -83,7 +86,7 @@ export const api = {
     mode: "zoom" | "in-person",
     chunks: TranscriptChunk[]
   ) {
-    const response = await axios.post(`${API_URL}/api/ingest`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/ingest`, {
       session_id: sessionId,
       mode,
       chunks,
@@ -95,7 +98,7 @@ export const api = {
     sessionId: string,
     question: string
   ): Promise<QuestionResponse> {
-    const response = await axios.post(`${API_URL}/api/question`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/question`, {
       session_id: sessionId,
       question,
     });
@@ -103,21 +106,21 @@ export const api = {
   },
 
   async getRecap(sessionId: string): Promise<RecapResponse> {
-    const response = await axios.post(`${API_URL}/api/recap`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/recap`, {
       session_id: sessionId,
     });
     return response.data;
   },
 
   async proposeActions(sessionId: string): Promise<ProposedAction[]> {
-    const response = await axios.post(`${API_URL}/api/actions/propose`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/actions/propose`, {
       session_id: sessionId,
     });
     return response.data.actions;
   },
 
   async approveAction(actionId: string, approved: boolean) {
-    const response = await axios.post(`${API_URL}/api/actions/approve`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/actions/approve`, {
       action_id: actionId,
       approved,
     });
@@ -128,15 +131,12 @@ export const api = {
     const formData = new FormData();
     formData.append("audio", audioFile);
 
-    const response = await axios.post(
-      `${API_URL}/api/audio/upload?session_id=${sessionId}`,
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
+    const url = `${API_BASE}${API_PREFIX}/audio/upload?session_id=${encodeURIComponent(sessionId)}`;
+    const response = await axios.post(url, formData, {
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      timeout: 600000, // 10 min for long lectures (60–120 min audio)
+    });
     return response.data;
   },
 
@@ -145,7 +145,7 @@ export const api = {
     chunks: TranscriptChunk[];
     total_duration: string;
   }> {
-    const response = await axios.get(`${API_URL}/api/transcript/${sessionId}`);
+    const response = await axios.get(`${API_BASE}${API_PREFIX}/transcript/${sessionId}`);
     return response.data;
   },
 
@@ -155,7 +155,7 @@ export const api = {
     content: string,
     date: string
   ): Promise<Note> {
-    const response = await axios.post(`${API_URL}/api/notes`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/notes`, {
       session_id: sessionId,
       title,
       content,
@@ -166,7 +166,7 @@ export const api = {
 
   async getNotes(sessionId?: string): Promise<Note[]> {
     const params = sessionId ? { session_id: sessionId } : {};
-    const response = await axios.get(`${API_URL}/api/notes`, { params });
+    const response = await axios.get(`${API_BASE}${API_PREFIX}/notes`, { params });
     return response.data.notes;
   },
 
@@ -175,7 +175,7 @@ export const api = {
     title?: string,
     content?: string
   ): Promise<Note> {
-    const response = await axios.put(`${API_URL}/api/notes/${noteId}`, {
+    const response = await axios.put(`${API_BASE}${API_PREFIX}/notes/${noteId}`, {
       note_id: noteId,
       title,
       content,
@@ -184,48 +184,48 @@ export const api = {
   },
 
   async deleteNote(noteId: string) {
-    const response = await axios.delete(`${API_URL}/api/notes/${noteId}`);
+    const response = await axios.delete(`${API_BASE}${API_PREFIX}/notes/${noteId}`);
     return response.data;
   },
 
   async generateTodos(sessionId: string): Promise<TodoItem[]> {
-    const response = await axios.post(`${API_URL}/api/todos/generate`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/todos/generate`, {
       session_id: sessionId,
     });
     return response.data.todos;
   },
 
   async getTodos(): Promise<TodoItem[]> {
-    const response = await axios.get(`${API_URL}/api/todos`);
+    const response = await axios.get(`${API_BASE}${API_PREFIX}/todos`);
     return response.data.todos;
   },
 
   async completeTodo(todoId: string, completed: boolean): Promise<TodoItem> {
     const response = await axios.put(
-      `${API_URL}/api/todos/${todoId}/complete?completed=${completed}`
+      `${API_BASE}${API_PREFIX}/todos/${todoId}/complete?completed=${completed}`
     );
     return response.data;
   },
 
   async deleteTodo(todoId: string) {
-    const response = await axios.delete(`${API_URL}/api/todos/${todoId}`);
+    const response = await axios.delete(`${API_BASE}${API_PREFIX}/todos/${todoId}`);
     return response.data;
   },
 
   async generateEvents(sessionId: string): Promise<CalendarEvent[]> {
-    const response = await axios.post(`${API_URL}/api/events/generate`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/events/generate`, {
       session_id: sessionId,
     });
     return response.data.events;
   },
 
   async getEvents(): Promise<CalendarEvent[]> {
-    const response = await axios.get(`${API_URL}/api/events`);
+    const response = await axios.get(`${API_BASE}${API_PREFIX}/events`);
     return response.data.events;
   },
 
   async deleteEvent(eventId: string) {
-    const response = await axios.delete(`${API_URL}/api/events/${eventId}`);
+    const response = await axios.delete(`${API_BASE}${API_PREFIX}/events/${eventId}`);
     return response.data;
   },
 
@@ -238,7 +238,7 @@ export const api = {
       "events",
     ]
   ): Promise<ChatbotResponse> {
-    const response = await axios.post(`${API_URL}/api/chatbot`, {
+    const response = await axios.post(`${API_BASE}${API_PREFIX}/chatbot`, {
       question,
       context_types: contextTypes,
     });

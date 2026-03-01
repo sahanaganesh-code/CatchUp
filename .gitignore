@@ -20,6 +20,12 @@ backend/env/
 backend/.env
 frontend/.env.local
 
+# GCP credentials - never commit service account keys
+backend/gcp-key.json
+**/gcp-key*.json
+**/*-key.json
+**/service-account*.json
+
 # ChromaDB
 chroma_db/
 *.db

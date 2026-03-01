@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.models import (
     IngestTranscriptRequest,
@@ -23,9 +23,10 @@ from app.models import (
     ChatbotResponse
 )
 from app.rag import answer_question, generate_recap
+from app.gemini_client import GeminiQuotaExceeded
 from app.actions import propose_actions, approve_action, list_actions
 from app.zoom import process_zoom_webhook, simulate_zoom_transcript
-from app.stt import process_audio_upload, transcribe_audio
+from app.stt import process_media_upload, transcribe_audio
 from app.store import vector_store
 from app.config import settings
 from app.content_manager import (
@@ -49,13 +50,31 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
+
+@app.on_event("startup")
+def startup_log():
+    """Log which Gemini key and model are loaded so you can verify .env is used."""
+    key = getattr(settings, "gemini_api_key", "") or ""
+    suffix = key[-4:] if len(key) >= 4 else "????"
+    logger.info("Gemini config: model=%s, key ends with ...%s", settings.gemini_model, suffix)
+    recap_local = getattr(settings, "recap_use_local", True)
+    qa_local = getattr(settings, "qa_use_local", True)
+    use_llm = getattr(settings, "use_local_llm", True)
+    from app import local_llm as llm
+    ollama_ok = use_llm and llm.is_available()
+    logger.info("Local LLM (Ollama): %s", "on" if ollama_ok else "off (run: ollama serve && ollama run llama3.2)")
+    openai_set = bool(getattr(settings, "openai_api_key", None) and (settings.openai_api_key or "").strip())
+    logger.info("Recap: %s", "local (Ollama)" if (recap_local and ollama_ok) else ("local (extractive)" if recap_local else ("OpenAI" if openai_set else "Gemini")))
+    logger.info("Q&A: %s (evidence-based, 2-5 quotes)", "local (Ollama)" if (qa_local and ollama_ok) else ("local (synthesis)" if qa_local else "Gemini"))
+
+# CORS: allow all origins in dev so frontend can reach backend from any URL
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend URL
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -105,6 +124,8 @@ def ask_question(request: QuestionRequest):
             response.answer = "Insufficient evidence in the transcript to answer this question."
         
         return response
+    except GeminiQuotaExceeded as e:
+        raise HTTPException(status_code=503, detail="Gemini rate limit reached. Please try again in a minute or check your API quota at https://ai.google.dev/gemini-api/docs/rate-limits")
     except Exception as e:
         logger.error(f"Error answering question: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -113,13 +134,15 @@ def ask_question(request: QuestionRequest):
 @app.post("/api/recap", response_model=RecapResponse)
 def get_recap(request: RecapRequest):
     """
-    Generate a meeting recap with evidence.
-    HARD RULE: Must include evidence quotes.
+    Generate a meeting recap (Gemini only).
+    Returns a clean bulleted list of key points in the model's own words — no quotes, no timestamps.
     """
     try:
         logger.info(f"Generating recap for session {request.session_id}")
         response = generate_recap(request.session_id)
         return response
+    except GeminiQuotaExceeded:
+        raise HTTPException(status_code=503, detail="Gemini rate limit reached. Please try again in a minute or check your API quota at https://ai.google.dev/gemini-api/docs/rate-limits")
     except Exception as e:
         logger.error(f"Error generating recap: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -135,6 +158,8 @@ def propose_meeting_actions(request: ProposeActionsRequest):
         logger.info(f"Proposing actions for session {request.session_id}")
         actions = propose_actions(request.session_id)
         return ProposeActionsResponse(actions=actions)
+    except GeminiQuotaExceeded:
+        raise HTTPException(status_code=503, detail="Gemini rate limit reached. Please try again in a minute or check your API quota at https://ai.google.dev/gemini-api/docs/rate-limits")
     except Exception as e:
         logger.error(f"Error proposing actions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -174,8 +199,7 @@ def get_actions():
 @app.post("/api/zoom/webhook")
 def zoom_webhook(payload: ZoomWebhookPayload):
     """
-    Zoom RTMS webhook endpoint (stub).
-    In production, this would receive real-time transcript chunks from Zoom.
+    Meeting transcript webhook (Google Meet). Same payload shape for compatibility.
     """
     try:
         logger.info(f"Received Zoom webhook for meeting {payload.meeting_id}")
@@ -186,29 +210,43 @@ def zoom_webhook(payload: ZoomWebhookPayload):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Allow lecture-length uploads (e.g. 60–120 min); 300MB max for audio or video
+MAX_MEDIA_UPLOAD_BYTES = 300 * 1024 * 1024
+
+
 @app.post("/api/audio/upload")
-async def upload_audio(session_id: str, audio: UploadFile = File(...)):
+async def upload_audio(request: Request, session_id: str):
     """
-    Upload audio file for transcription (in-person mode stub).
-    In production, this would transcribe using Whisper API.
+    Upload audio or video for transcription (in-person mode).
+    Video: audio track is extracted with ffmpeg then transcribed.
+    Supports long files via chunked Speech-to-Text / GCS batch.
     """
     try:
-        logger.info(f"Received audio upload for session {session_id}: {audio.filename}")
-        
-        # Read audio data
-        audio_data = await audio.read()
-        
-        # Process audio (stub)
-        success = process_audio_upload(session_id, audio_data)
-        
+        try:
+            form = await request.form(max_part_size=MAX_MEDIA_UPLOAD_BYTES)
+        except TypeError:
+            form = await request.form()
+        file_obj = form.get("audio") or form.get("file")
+        if not file_obj or not hasattr(file_obj, "read"):
+            raise HTTPException(status_code=400, detail="Missing file (field 'audio' or 'file')")
+        filename = getattr(file_obj, "filename", "audio") or "audio"
+        content_type = getattr(file_obj, "content_type", None) or ""
+        logger.info(f"Received media upload for session {session_id}: {filename} ({content_type})")
+        file_data = await file_obj.read()
+        if len(file_data) > MAX_MEDIA_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"File too large (max {MAX_MEDIA_UPLOAD_BYTES // (1024*1024)}MB)")
+        success, message = process_media_upload(session_id, file_data, filename=filename, content_type=content_type)
         return {
             "status": "success" if success else "error",
             "session_id": session_id,
-            "filename": audio.filename,
-            "size_bytes": len(audio_data)
+            "filename": filename,
+            "size_bytes": len(file_data),
+            "detail": message if not success else None,
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error uploading audio: {e}")
+        logger.error(f"Error uploading media: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -439,6 +477,8 @@ def chatbot_query(request: ChatbotRequest):
             response.answer = "Insufficient content available to answer this question."
         
         return response
+    except GeminiQuotaExceeded:
+        raise HTTPException(status_code=503, detail="Gemini rate limit reached. Please try again in a minute or check your API quota at https://ai.google.dev/gemini-api/docs/rate-limits")
     except Exception as e:
         logger.error(f"Error in chatbot: {e}")
         raise HTTPException(status_code=500, detail=str(e))

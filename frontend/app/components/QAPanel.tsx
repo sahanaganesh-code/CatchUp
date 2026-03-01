@@ -5,6 +5,14 @@ import { MessageCircle, Send, Loader2 } from "lucide-react";
 import { api, QuestionResponse } from "../lib/api";
 import EvidenceList from "./EvidenceList";
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { detail?: string; error?: string } } };
+  const data = err?.response?.data;
+  if (data?.detail && typeof data.detail === "string") return data.detail;
+  if (data?.error && typeof data.error === "string") return data.error;
+  return fallback;
+}
+
 interface QAPanelProps {
   sessionId: string;
 }
@@ -18,20 +26,24 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
   const [question, setQuestion] = useState("");
   const [qaHistory, setQaHistory] = useState<QAItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleAskQuestion = async () => {
     if (!question.trim()) return;
 
     setLoading(true);
+    setErrorMessage(null);
     const currentQuestion = question;
     setQuestion("");
 
     try {
       const response = await api.askQuestion(sessionId, currentQuestion);
       setQaHistory([...qaHistory, { question: currentQuestion, response }]);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error asking question:", error);
-      alert("Error asking question");
+      const msg = getErrorMessage(error, "Error asking question.");
+      setErrorMessage(msg);
+      alert(msg);
     } finally {
       setLoading(false);
     }
@@ -43,6 +55,12 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
         <MessageCircle className="w-5 h-5 text-green-600 mr-2" />
         <h2 className="text-xl font-bold text-gray-900">Grounded Q&A</h2>
       </div>
+
+      {errorMessage && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 text-sm">
+          {errorMessage}
+        </div>
+      )}
 
       {/* Question Input */}
       <div className="mb-6">

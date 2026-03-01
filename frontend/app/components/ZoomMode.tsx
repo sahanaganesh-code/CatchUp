@@ -27,37 +27,7 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
     const newSessionId = `zoom_${meetingId}`;
     setSessionId(newSessionId);
     setIsConnected(true);
-
-    // Simulate initial transcript chunks
-    const mockChunks: TranscriptChunk[] = [
-      {
-        timestamp: "00:00:00",
-        text: "Welcome everyone to today's product planning meeting.",
-        speaker: "Alice",
-      },
-      {
-        timestamp: "00:00:15",
-        text: "Today we'll discuss the Q2 roadmap and prioritize features for the next release.",
-        speaker: "Alice",
-      },
-      {
-        timestamp: "00:00:35",
-        text: "I think we should focus on the user authentication improvements first.",
-        speaker: "Bob",
-      },
-      {
-        timestamp: "00:01:00",
-        text: "Good point. We've had several security audit recommendations that we need to address.",
-        speaker: "Alice",
-      },
-      {
-        timestamp: "00:01:20",
-        text: "I can take ownership of the authentication work. I'll create tasks in Notion and schedule a kickoff meeting.",
-        speaker: "Bob",
-      },
-    ];
-
-    await api.ingestTranscript(newSessionId, "zoom", mockChunks);
+    // No sample transcript: only real Zoom/Meet transcript will be ingested.
   };
 
   const handleAddTranscript = async () => {

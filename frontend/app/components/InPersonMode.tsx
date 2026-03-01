@@ -20,6 +20,8 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
   const [lectureId, setLectureId] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [transcriptInput, setTranscriptInput] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleStartSession = () => {
@@ -27,44 +29,41 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
 
     const newSessionId = `inperson_${lectureId}`;
     setSessionId(newSessionId);
-
-    // Simulate initial transcript
-    const mockChunks: TranscriptChunk[] = [
-      {
-        timestamp: "00:00:00",
-        text: "Good morning class. Today we'll be covering advanced algorithms and data structures.",
-        speaker: "Professor",
-      },
-      {
-        timestamp: "00:00:20",
-        text: "Let's start with binary search trees and their time complexity analysis.",
-        speaker: "Professor",
-      },
-      {
-        timestamp: "00:00:45",
-        text: "Remember that balanced trees like AVL and Red-Black trees maintain O(log n) operations.",
-        speaker: "Professor",
-      },
-      {
-        timestamp: "00:01:10",
-        text: "For your homework, I want you to implement a self-balancing tree and submit it by next week.",
-        speaker: "Professor",
-      },
-    ];
-
-    api.ingestTranscript(newSessionId, "in-person", mockChunks);
+    setUploadStatus("idle");
+    setUploadMessage("");
+    // No sample transcript: only your uploaded audio will fill the transcript.
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !sessionId) return;
+    if (!file) return;
+    if (!sessionId) {
+      setUploadStatus("error");
+      setUploadMessage("Please start a session first: enter a Lecture ID and click Start Session.");
+      return;
+    }
 
+    setUploadStatus("uploading");
+    setUploadMessage("Uploading and transcribing…");
     try {
-      await api.uploadAudio(sessionId, file);
-      alert("Audio uploaded successfully! (Stub - would transcribe in production)");
-    } catch (error) {
+      const result = await api.uploadAudio(sessionId, file);
+      if (result?.status === "error") {
+        setUploadStatus("error");
+        setUploadMessage(result?.detail || "Upload failed.");
+        e.target.value = "";
+        return;
+      }
+      setUploadStatus("success");
+      setUploadMessage("File uploaded and transcribed successfully! Check the transcript below.");
+      e.target.value = "";
+    } catch (error: unknown) {
       console.error("Error uploading audio:", error);
-      alert("Error uploading audio");
+      const msg = error && typeof error === "object" && "response" in error
+        ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        : null;
+      setUploadStatus("error");
+      setUploadMessage(msg || "Error uploading file. Is the backend running on http://localhost:8000?");
+      e.target.value = "";
     }
   };
 
@@ -116,7 +115,7 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
               Start Recording Session
             </h2>
             <p className="text-gray-600 mb-6">
-              Enter a lecture ID to start your recording session.
+              Enter a lecture ID to start your recording session. After you start, you can upload an audio or video file to transcribe it with Google Cloud Speech-to-Text.
             </p>
             <div className="space-y-4">
               <input
@@ -147,21 +146,42 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
                   </span>
                 </div>
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => { setUploadStatus("idle"); setUploadMessage(""); fileInputRef.current?.click(); }}
                   className="flex items-center text-green-700 hover:text-green-900 font-medium"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Audio
+                  Upload Audio or Video
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,video/*"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
               </div>
             </div>
+
+            {/* Upload status message - always visible when not idle */}
+            {uploadStatus !== "idle" && (
+              <div
+                className={`rounded-lg p-4 ${
+                  uploadStatus === "uploading"
+                    ? "bg-blue-50 border border-blue-200 text-blue-800"
+                    : uploadStatus === "success"
+                    ? "bg-green-50 border border-green-200 text-green-800"
+                    : "bg-red-50 border border-red-200 text-red-800"
+                }`}
+              >
+                {uploadStatus === "uploading" && (
+                  <span className="flex items-center">
+                    <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
+                    {uploadMessage}
+                  </span>
+                )}
+                {(uploadStatus === "success" || uploadStatus === "error") && uploadMessage}
+              </div>
+            )}
 
             {/* Recording Controls (Stub) */}
             <div className="bg-white rounded-xl shadow-lg p-6">

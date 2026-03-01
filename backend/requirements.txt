@@ -5,5 +5,16 @@ pydantic==2.6.0
 pydantic-settings==2.1.0
 chromadb==0.4.22
 google-generativeai
+# Google Cloud Speech-to-Text (primary STT for hackathon)
+google-cloud-speech
+# Long audio: upload to GCS then batch_recognize (no ffmpeg)
+google-cloud-storage
+# Optional: Google Meet API (for fetch_meet_transcript_entries)
+google-api-python-client
+google-auth
 python-multipart==0.0.9
 python-dotenv==1.0.1
+openai>=1.0.0
+# Video visual (slide/on-screen) text extraction
+Pillow>=10.0.0
+pytesseract>=0.3.10
