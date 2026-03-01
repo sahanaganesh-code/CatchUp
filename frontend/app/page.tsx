@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Video, Mic, AlertCircle, FolderOpen, Loader2 } from "lucide-react";
+import { Video, Mic, AlertCircle, FolderOpen, Loader2, Trash2 } from "lucide-react";
 import ZoomMode from "./components/ZoomMode";
 import InPersonMode from "./components/InPersonMode";
 import { checkBackendHealth, api } from "./lib/api";
@@ -27,15 +27,36 @@ export default function Home() {
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
+  const loadSessions = () => {
     if (!backendOk) return;
     setSessionsLoading(true);
     api.listSessions().then((r) => { setSessions(r.session_ids || []); setSessionsLoading(false); }).catch(() => setSessionsLoading(false));
+  };
+
+  useEffect(() => {
+    if (!backendOk) return;
+    loadSessions();
   }, [backendOk]);
 
   const openSession = (sessionId: string) => {
     setInitialSessionId(sessionId);
     setMode(sessionMode(sessionId));
+  };
+
+  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Delete this session? Transcript, recap, and Q&A for it will be removed.")) return;
+    try {
+      await api.deleteSession(sessionId);
+      if (initialSessionId === sessionId) {
+        setInitialSessionId(null);
+        setMode(null);
+      }
+      loadSessions();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete session.");
+    }
   };
 
   const goBack = () => {
@@ -44,11 +65,11 @@ export default function Home() {
   };
 
   if (mode === "zoom") {
-    return <ZoomMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} />;
+    return <ZoomMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} onDeleteSession={handleDeleteSession} onRefreshSessions={loadSessions} />;
   }
 
   if (mode === "in-person") {
-    return <InPersonMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} />;
+    return <InPersonMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} onDeleteSession={handleDeleteSession} onRefreshSessions={loadSessions} />;
   }
 
   return (
@@ -65,12 +86,12 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-4xl w-full">
         <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">CatchUp</h1>
+          <h1 className="text-7xl font-bold text-gray-900 mb-4">CatchUp</h1>
           <p className="text-xl text-gray-600 mb-2">
-            Accessible Meeting Assistant for Everyone
+            Get back on track when you zone out
           </p>
           <p className="text-sm text-gray-500 max-w-2xl mx-auto">
-            Empowering students with disabilities, ADHD, hearing impairments, and cognitive challenges through real-time transcription and evidence-based Q&A
+            Zone out for five minutes? Ten? Doesn&apos;t matter. Ask a question, generate a recap, and get back into the conversation like you never left.
           </p>
         </div>
 
@@ -84,11 +105,10 @@ export default function Home() {
               <Video className="w-8 h-8 text-blue-600" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Zoom Meeting Mode
+              Zoom Mode
             </h2>
             <p className="text-gray-600 mb-4">
-              Real-time captions and transcripts for remote work, online classes, 
-              and telehealth appointments. Perfect for hearing accessibility.
+              Full real-time transcription of every online meeting and video call. Searchable transcript, recap, and Q&A so you never fall behind — even if you zoned out.
             </p>
             <div className="flex items-center text-sm text-blue-600 font-medium">
               Get Started →
@@ -104,11 +124,10 @@ export default function Home() {
               <Mic className="w-8 h-8 text-green-600" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              In-Person Lecture Mode
+              Lecture Mode
             </h2>
             <p className="text-gray-600 mb-4">
-              Record classes, therapy sessions, or support groups. Focus on 
-              participating instead of note-taking. Ideal for ADHD and learning disabilities.
+              Record lectures, club meetings, internship or project meetings. Live transcript, recap, and Q&A so you can catch up anytime you zone out and get straight back on track.
             </p>
             <div className="flex items-center text-sm text-green-600 font-medium">
               Get Started →
@@ -138,15 +157,25 @@ export default function Home() {
             <ul className="space-y-2 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
               {sessions.map((sid) => (
                 <li key={sid}>
-                  <button
-                    onClick={() => openSession(sid)}
-                    className="w-full text-left px-4 py-3 hover:bg-indigo-50 flex items-center justify-between gap-2 transition-colors"
-                  >
-                    <span className="font-medium text-gray-900 truncate">{sessionDisplayName(sid)}</span>
-                    <span className="text-xs text-gray-500 shrink-0">
-                      {sid.startsWith("zoom_") ? "Zoom" : "In-person"}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openSession(sid)}
+                      className="flex-1 text-left px-4 py-3 hover:bg-indigo-50 flex items-center justify-between gap-2 transition-colors"
+                    >
+                      <span className="font-medium text-gray-900 truncate">{sessionDisplayName(sid)}</span>
+                      <span className="text-xs text-gray-500 shrink-0">
+                        {sid.startsWith("zoom_") ? "Zoom" : "In-person"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteSession(sid, e)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors shrink-0"
+                      title="Delete session"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

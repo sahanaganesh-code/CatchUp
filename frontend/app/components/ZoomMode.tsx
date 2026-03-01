@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Video, Send, FolderOpen, PlusCircle } from "lucide-react";
+import { ArrowLeft, Video, Send, FolderOpen, PlusCircle, Trash2 } from "lucide-react";
 import { api, TranscriptChunk } from "../lib/api";
 import RecapPanel from "./RecapPanel";
 import QAPanel from "./QAPanel";
@@ -14,13 +14,15 @@ interface ZoomModeProps {
   initialSessionId?: string;
   sessions?: string[];
   onOpenSession?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string, e: React.MouseEvent) => void;
+  onRefreshSessions?: () => void;
 }
 
 function sessionDisplayName(sid: string): string {
   return sid.replace(/^inperson_/, "").replace(/^zoom_/, "") || sid;
 }
 
-export default function ZoomMode({ onBack, initialSessionId, sessions = [], onOpenSession }: ZoomModeProps) {
+export default function ZoomMode({ onBack, initialSessionId, sessions = [], onOpenSession, onDeleteSession }: ZoomModeProps) {
   const [sessionId, setSessionId] = useState("");
   const [meetingId, setMeetingId] = useState("");
   const [isConnected, setIsConnected] = useState(false);
@@ -84,7 +86,7 @@ export default function ZoomMode({ onBack, initialSessionId, sessions = [], onOp
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Zoom Meeting Mode
+                Zoom Mode
               </h1>
               <p className="text-gray-600">RTMS transcript ingestion</p>
             </div>
@@ -126,13 +128,23 @@ export default function ZoomMode({ onBack, initialSessionId, sessions = [], onOp
                 </h3>
                 <ul className="space-y-2">
                   {sessions.filter((s) => s.startsWith("zoom_")).map((sid) => (
-                    <li key={sid}>
+                    <li key={sid} className="flex items-center gap-1">
                       <button
                         onClick={() => onOpenSession?.(sid)}
-                        className="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-50 font-medium text-gray-900"
+                        className="flex-1 text-left px-4 py-2 rounded-lg hover:bg-blue-50 font-medium text-gray-900"
                       >
                         {sessionDisplayName(sid)}
                       </button>
+                      {onDeleteSession && (
+                        <button
+                          type="button"
+                          onClick={(e) => onDeleteSession(sid, e)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Delete session"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -158,6 +170,16 @@ export default function ZoomMode({ onBack, initialSessionId, sessions = [], onOp
                     New session
                   </button>
                 </div>
+                {onDeleteSession && sessionId && (
+                  <button
+                    type="button"
+                    onClick={(e) => onDeleteSession(sessionId, e)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                    title="Delete this session"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
                 {sessions.filter((s) => s.startsWith("zoom_") && s !== sessionId).length > 0 && (
                   <div className="flex items-center gap-1 text-sm">
                     <FolderOpen className="w-4 h-4 text-blue-600" />

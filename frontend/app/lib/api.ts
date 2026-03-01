@@ -183,6 +183,10 @@ export const api = {
     return response.data;
   },
 
+  async deleteSession(sessionId: string): Promise<void> {
+    await axios.delete(`${API_BASE}${API_PREFIX}/session/${encodeURIComponent(sessionId)}`);
+  },
+
   async createNote(
     sessionId: string,
     title: string,

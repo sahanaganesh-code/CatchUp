@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ArrowLeft, Mic, Upload, Send, Square, FolderOpen, PlusCircle } from "lucide-react";
+import { ArrowLeft, Mic, Upload, Send, Square, FolderOpen, PlusCircle, Trash2 } from "lucide-react";
 import { api, getApiErrorMessage, TranscriptChunk } from "../lib/api";
 import { WavRecorder } from "../lib/wavRecorder";
 import RecapPanel from "./RecapPanel";
@@ -15,13 +15,15 @@ interface InPersonModeProps {
   initialSessionId?: string;
   sessions?: string[];
   onOpenSession?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string, e: React.MouseEvent) => void;
+  onRefreshSessions?: () => void;
 }
 
 function sessionDisplayName(sid: string): string {
   return sid.replace(/^inperson_/, "").replace(/^zoom_/, "") || sid;
 }
 
-export default function InPersonMode({ onBack, initialSessionId, sessions = [], onOpenSession }: InPersonModeProps) {
+export default function InPersonMode({ onBack, initialSessionId, sessions = [], onOpenSession, onDeleteSession }: InPersonModeProps) {
   const [sessionId, setSessionId] = useState("");
   const [lectureId, setLectureId] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -270,7 +272,7 @@ export default function InPersonMode({ onBack, initialSessionId, sessions = [], 
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                In-Person Lecture Mode
+                Lecture Mode
               </h1>
               <p className="text-gray-600">
                 Record and transcribe live lectures
@@ -314,13 +316,23 @@ export default function InPersonMode({ onBack, initialSessionId, sessions = [], 
                 </h3>
                 <ul className="space-y-2">
                   {sessions.filter((s) => s.startsWith("inperson_")).map((sid) => (
-                    <li key={sid}>
+                    <li key={sid} className="flex items-center gap-1">
                       <button
                         onClick={() => onOpenSession?.(sid)}
-                        className="w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 font-medium text-gray-900"
+                        className="flex-1 text-left px-4 py-2 rounded-lg hover:bg-green-50 font-medium text-gray-900"
                       >
                         {sessionDisplayName(sid)}
                       </button>
+                      {onDeleteSession && (
+                        <button
+                          type="button"
+                          onClick={(e) => onDeleteSession(sid, e)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Delete session"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -329,7 +341,7 @@ export default function InPersonMode({ onBack, initialSessionId, sessions = [], 
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Status + session switcher */}
+            {/* Session bar only — no Upload here */}
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3 flex-wrap">
@@ -347,6 +359,16 @@ export default function InPersonMode({ onBack, initialSessionId, sessions = [], 
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
+                  {onDeleteSession && sessionId && (
+                    <button
+                      type="button"
+                      onClick={(e) => onDeleteSession(sessionId, e)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                      title="Delete this session"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   {sessions.filter((s) => s.startsWith("inperson_") && s !== sessionId).length > 0 && (
                     <div className="flex items-center gap-1 text-sm">
                       <FolderOpen className="w-4 h-4 text-green-600" />
@@ -362,14 +384,70 @@ export default function InPersonMode({ onBack, initialSessionId, sessions = [], 
                       </select>
                     </div>
                   )}
-                  <button
-                    onClick={() => { setUploadStatus("idle"); setUploadMessage(""); fileInputRef.current?.click(); }}
-                    className="flex items-center text-green-700 hover:text-green-900 font-medium"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload
-                  </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Three clear options for ADHD-friendly layout */}
+            <div className="grid gap-6 md:grid-cols-1">
+              {/* Option 1: Start Recording */}
+              <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-green-200">
+                <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                  <Mic className="w-5 h-5 text-green-600" />
+                  Start Recording
+                </h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  Use your device microphone to record the lecture. Stop when done to transcribe. Transcript updates live every 10s while recording.
+                </p>
+                <div className="flex items-center gap-4 flex-wrap">
+                  {!isRecording ? (
+                    <button
+                      onClick={handleStartRecording}
+                      className="flex items-center px-6 py-3 rounded-lg font-medium bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <Mic className="w-5 h-5 mr-2" />
+                      Start recording
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleStopRecording}
+                        className="flex items-center px-6 py-3 rounded-lg font-medium bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        <Square className="w-5 h-5 mr-2" />
+                        Stop & transcribe
+                      </button>
+                      <div className="flex items-center gap-3 text-red-600 font-medium">
+                        <span className="inline-block w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+                        Recording {formatTime(recordingSeconds)}
+                        {liveTranscribing && (
+                          <span className="text-sm text-blue-600 font-normal">Transcribing…</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 w-full">
+                        Live: transcript updates every 10s. Generate recap or ask questions anytime to catch up.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Option 2: Upload */}
+              <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-blue-200">
+                <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-blue-600" />
+                  Upload
+                </h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  Add an existing audio or video file to transcribe (e.g. a recording from your phone).
+                </p>
+                <button
+                  onClick={() => { setUploadStatus("idle"); setUploadMessage(""); fileInputRef.current?.click(); }}
+                  className="flex items-center gap-2 px-5 py-3 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Upload className="w-5 h-5" />
+                  Choose file to upload
+                </button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -378,74 +456,16 @@ export default function InPersonMode({ onBack, initialSessionId, sessions = [], 
                   className="hidden"
                 />
               </div>
-            </div>
 
-            {/* Upload status message - always visible when not idle */}
-            {uploadStatus !== "idle" && (
-              <div
-                className={`rounded-lg p-4 ${
-                  uploadStatus === "uploading"
-                    ? "bg-blue-50 border border-blue-200 text-blue-800"
-                    : uploadStatus === "success"
-                    ? "bg-green-50 border border-green-200 text-green-800"
-                    : "bg-red-50 border border-red-200 text-red-800"
-                }`}
-              >
-                {uploadStatus === "uploading" && (
-                  <span className="flex items-center">
-                    <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
-                    {uploadMessage}
-                  </span>
-                )}
-                {(uploadStatus === "success" || uploadStatus === "error") && uploadMessage}
-              </div>
-            )}
-
-            {/* Record lecturer */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-2">
-                Record lecturer
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Use your device microphone to record the lecture. Speak for at least 2–3 seconds, then stop to transcribe.
-              </p>
-              <div className="flex items-center gap-4 flex-wrap">
-                {!isRecording ? (
-                  <button
-                    onClick={handleStartRecording}
-                    className="flex items-center px-6 py-3 rounded-lg font-medium bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Mic className="w-5 h-5 mr-2" />
-                    Start recording
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={handleStopRecording}
-                      className="flex items-center px-6 py-3 rounded-lg font-medium bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      <Square className="w-5 h-5 mr-2" />
-                      Stop & transcribe
-                    </button>
-                    <div className="flex items-center gap-3 text-red-600 font-medium">
-                      <span className="inline-block w-3 h-3 bg-red-600 rounded-full animate-pulse" />
-                      Recording {formatTime(recordingSeconds)}
-                      {liveTranscribing && (
-                        <span className="text-sm text-blue-600 font-normal">Transcribing…</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 w-full mt-2">
-                      Live: transcript updates every 10s. Generate recap or ask questions anytime to catch up.
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {/* Manual Transcript Input */}
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Add Transcript Manually (for testing)
-                </h4>
+              {/* Option 3: Add transcript manually */}
+              <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                  <Send className="w-5 h-5 text-gray-600" />
+                  Add transcript manually
+                </h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  Type or paste transcript text (a line or the whole thing) to add it to this session.
+                </p>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -467,6 +487,27 @@ export default function InPersonMode({ onBack, initialSessionId, sessions = [], 
                 </div>
               </div>
             </div>
+
+            {/* Upload status message — shown when uploading / success / error */}
+            {uploadStatus !== "idle" && (
+              <div
+                className={`rounded-lg p-4 ${
+                  uploadStatus === "uploading"
+                    ? "bg-blue-50 border border-blue-200 text-blue-800"
+                    : uploadStatus === "success"
+                    ? "bg-green-50 border border-green-200 text-green-800"
+                    : "bg-red-50 border border-red-200 text-red-800"
+                }`}
+              >
+                {uploadStatus === "uploading" && (
+                  <span className="flex items-center">
+                    <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
+                    {uploadMessage}
+                  </span>
+                )}
+                {(uploadStatus === "success" || uploadStatus === "error") && uploadMessage}
+              </div>
+            )}
 
             {/* Main Content */}
             <div className="space-y-6">
