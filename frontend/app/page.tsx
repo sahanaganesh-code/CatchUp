@@ -1,21 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Video, Mic, AlertCircle, FolderOpen, Loader2, Trash2 } from "lucide-react";
-import ZoomMode from "./components/ZoomMode";
+import { ArrowRight, AlertCircle, FolderOpen, Loader2, Trash2 } from "lucide-react";
 import InPersonMode from "./components/InPersonMode";
 import { checkBackendHealth, api } from "./lib/api";
 
 function sessionDisplayName(sessionId: string): string {
-  return sessionId.replace(/^inperson_/, "").replace(/^zoom_/, "") || sessionId;
-}
-
-function sessionMode(sessionId: string): "zoom" | "in-person" {
-  return sessionId.startsWith("zoom_") ? "zoom" : "in-person";
+  return sessionId.replace(/^inperson_/, "") || sessionId;
 }
 
 export default function Home() {
-  const [mode, setMode] = useState<"zoom" | "in-person" | null>(null);
+  const [mode, setMode] = useState<"in-person" | null>(null);
   const [initialSessionId, setInitialSessionId] = useState<string | null>(null);
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
   const [sessions, setSessions] = useState<string[]>([]);
@@ -38,9 +33,11 @@ export default function Home() {
     loadSessions();
   }, [backendOk]);
 
+  const inPersonSessions = sessions.filter((s) => s.startsWith("inperson_"));
+
   const openSession = (sessionId: string) => {
     setInitialSessionId(sessionId);
-    setMode(sessionMode(sessionId));
+    setMode("in-person");
   };
 
   const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
@@ -64,12 +61,8 @@ export default function Home() {
     setInitialSessionId(null);
   };
 
-  if (mode === "zoom") {
-    return <ZoomMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} onDeleteSession={handleDeleteSession} onRefreshSessions={loadSessions} />;
-  }
-
   if (mode === "in-person") {
-    return <InPersonMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} onDeleteSession={handleDeleteSession} onRefreshSessions={loadSessions} />;
+    return <InPersonMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={inPersonSessions} onOpenSession={openSession} onDeleteSession={handleDeleteSession} onRefreshSessions={loadSessions} />;
   }
 
   return (
@@ -86,7 +79,7 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-4xl w-full">
         <div className="text-center mb-12">
-          <h1 className="text-7xl font-bold text-gray-900 mb-4">CatchUp</h1>
+          <h1 className="text-8xl font-bold text-gray-900 mb-4">CatchUp</h1>
           <p className="text-xl text-gray-600 mb-2">
             Get back on track when you zone out
           </p>
@@ -95,43 +88,13 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Zoom Mode */}
-          <button
-            onClick={() => setMode("zoom")}
-            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-blue-500 text-left"
-          >
-            <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-6">
-              <Video className="w-8 h-8 text-blue-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Zoom Mode
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Full real-time transcription of every online meeting and video call. Searchable transcript, recap, and Q&A so you never fall behind — even if you zoned out.
-            </p>
-            <div className="flex items-center text-sm text-blue-600 font-medium">
-              Get Started →
-            </div>
-          </button>
-
-          {/* In-Person Mode */}
+        <div className="flex justify-center">
           <button
             onClick={() => setMode("in-person")}
-            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-green-500 text-left"
+            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-green-500 text-left max-w-md w-full flex items-center justify-center gap-2 text-xl font-bold text-green-600"
           >
-            <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
-              <Mic className="w-8 h-8 text-green-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Lecture Mode
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Record lectures, club meetings, internship or project meetings. Live transcript, recap, and Q&A so you can catch up anytime you zone out and get straight back on track.
-            </p>
-            <div className="flex items-center text-sm text-green-600 font-medium">
-              Get Started →
-            </div>
+            Get Started
+            <ArrowRight className="w-6 h-6" />
           </button>
         </div>
 
@@ -149,13 +112,13 @@ export default function Home() {
               <Loader2 className="w-4 h-4 animate-spin" />
               Loading sessions…
             </div>
-          ) : sessions.length === 0 ? (
+          ) : inPersonSessions.length === 0 ? (
             <p className="text-sm text-gray-500 py-4 bg-gray-50 rounded-xl px-4">
-              No sessions yet. Start a session above (In-Person or Zoom), then record or upload to see it here.
+              No sessions yet. Click Get Started, then record or upload to see your sessions here.
             </p>
           ) : (
             <ul className="space-y-2 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
-              {sessions.map((sid) => (
+              {inPersonSessions.map((sid) => (
                 <li key={sid}>
                   <div className="flex items-center gap-2">
                     <button
@@ -163,9 +126,7 @@ export default function Home() {
                       className="flex-1 text-left px-4 py-3 hover:bg-indigo-50 flex items-center justify-between gap-2 transition-colors"
                     >
                       <span className="font-medium text-gray-900 truncate">{sessionDisplayName(sid)}</span>
-                      <span className="text-xs text-gray-500 shrink-0">
-                        {sid.startsWith("zoom_") ? "Zoom" : "In-person"}
-                      </span>
+                      <span className="text-xs text-gray-500 shrink-0">In-person</span>
                     </button>
                     <button
                       type="button"

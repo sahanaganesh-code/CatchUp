@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, Trash2, Loader2, Clock } from "lucide-react";
+import { Calendar, Trash2, Loader2, ExternalLink } from "lucide-react";
 import { api, CalendarEvent } from "../lib/api";
 import EvidenceList from "./EvidenceList";
 
@@ -13,6 +13,8 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+
+  const GOOGLE_CALENDAR_URL = "https://calendar.google.com/calendar/";
 
   const handleGenerateEvents = async () => {
     setLoading(true);
@@ -38,7 +40,7 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h2 className="text-xl font-bold text-gray-900">Calendar Events</h2>
         <button
           onClick={handleGenerateEvents}
@@ -62,7 +64,17 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
             Click "Extract Events" to find calendar events mentioned in the meeting
           </p>
         ) : (
-          events.map((event) => (
+          <>
+            <a
+              href={GOOGLE_CALENDAR_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-purple-600 hover:text-purple-700 font-medium text-sm mb-4"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open Google Calendar
+            </a>
+            {events.map((event) => (
             <div
               key={event.event_id}
               className="border border-purple-200 rounded-lg p-4 hover:border-purple-300"
@@ -128,7 +140,8 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
                 )}
               </div>
             </div>
-          ))
+            ))}
+          </>
         )}
       </div>
     </div>
