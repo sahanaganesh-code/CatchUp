@@ -10,8 +10,8 @@ _ENV_FILE = _BACKEND_DIR / ".env"
 class Settings(BaseSettings):
     """Application configuration settings."""
     
-    # API Keys
-    gemini_api_key: str
+    # API Keys (optional if embeddings_use_local=True and recap/QA are local)
+    gemini_api_key: Optional[str] = None
     # Optional: use OpenAI for recap (paraphrased bullets, avoids Gemini rate limits)
     openai_api_key: Optional[str] = None
     
@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     openai_recap_model: str = "gpt-4o-mini"
     # Q&A: when True use local answer from retrieved chunks (no API). When False use Gemini.
     qa_use_local: bool = True
+    # Embeddings: when True do not call Gemini for ingest or retrieval (use keyword-only retrieval). Avoids quota.
+    embeddings_use_local: bool = True
     # Local LLM (Ollama): no API keys, no rate limits. Run: ollama serve && ollama run llama3.2
     use_local_llm: bool = True
     ollama_base_url: str = "http://localhost:11434"

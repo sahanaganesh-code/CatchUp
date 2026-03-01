@@ -2,7 +2,7 @@
  * Proxy all requests to the backend. Browser calls /api/backend/... (same origin),
  * this route forwards to backend /api/... (no CORS).
  */
-const BACKEND = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
 function getBackendUrl(request: Request, pathParam: string | string[] | undefined): string {
   const segments = Array.isArray(pathParam) ? pathParam : pathParam ? [pathParam] : [];
@@ -12,12 +12,17 @@ function getBackendUrl(request: Request, pathParam: string | string[] | undefine
   return `${BACKEND}${backendPath}${url.search}`;
 }
 
+async function getParams(context: { params: Promise<{ path?: string | string[] }> | { path?: string | string[] } }) {
+  const p = context.params;
+  return typeof (p as Promise<unknown>)?.then === "function" ? await (p as Promise<{ path?: string | string[] }>) : (p as { path?: string | string[] });
+}
+
 export async function GET(
   request: Request,
-  context: { params: Promise<{ path?: string | string[] }> }
+  context: { params: Promise<{ path?: string | string[] }> | { path?: string | string[] } }
 ) {
-  const params = await context.params;
-  const backendUrl = getBackendUrl(request, params.path);
+  const params = await getParams(context);
+  const backendUrl = getBackendUrl(request, params?.path);
   try {
     const res = await fetch(backendUrl, {
       method: "GET",
@@ -41,10 +46,10 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ path?: string | string[] }> }
+  context: { params: Promise<{ path?: string | string[] }> | { path?: string | string[] } }
 ) {
-  const params = await context.params;
-  const backendUrl = getBackendUrl(request, params.path);
+  const params = await getParams(context);
+  const backendUrl = getBackendUrl(request, params?.path);
 
   const contentType = request.headers.get("content-type") || "";
   const isFormData = contentType.includes("multipart/form-data");
@@ -84,10 +89,10 @@ export async function POST(
 
 export async function PUT(
   request: Request,
-  context: { params: Promise<{ path?: string | string[] }> }
+  context: { params: Promise<{ path?: string | string[] }> | { path?: string | string[] } }
 ) {
-  const params = await context.params;
-  const backendUrl = getBackendUrl(request, params.path);
+  const params = await getParams(context);
+  const backendUrl = getBackendUrl(request, params?.path);
   const body = await request.text();
   try {
     const res = await fetch(backendUrl, {
@@ -110,10 +115,10 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  context: { params: Promise<{ path?: string | string[] }> }
+  context: { params: Promise<{ path?: string | string[] }> | { path?: string | string[] } }
 ) {
-  const params = await context.params;
-  const backendUrl = getBackendUrl(request, params.path);
+  const params = await getParams(context);
+  const backendUrl = getBackendUrl(request, params?.path);
   try {
     const res = await fetch(backendUrl, { method: "DELETE", cache: "no-store" });
     const text = await res.text();

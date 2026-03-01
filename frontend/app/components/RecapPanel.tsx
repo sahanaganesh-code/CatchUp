@@ -2,19 +2,11 @@
 
 import { useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
-import { api, RecapResponse } from "../lib/api";
+import { api, getApiErrorMessage, RecapResponse } from "../lib/api";
 import EvidenceList from "./EvidenceList";
 
 interface RecapPanelProps {
   sessionId: string;
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  const err = error as { response?: { data?: { detail?: string; error?: string } } };
-  const data = err?.response?.data;
-  if (data?.detail && typeof data.detail === "string") return data.detail;
-  if (data?.error && typeof data.error === "string") return data.error;
-  return fallback;
 }
 
 export default function RecapPanel({ sessionId }: RecapPanelProps) {
@@ -30,7 +22,7 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
       setRecap(response);
     } catch (error: unknown) {
       console.error("Error generating recap:", error);
-      const msg = getErrorMessage(error, "Error generating recap.");
+      const msg = getApiErrorMessage(error, "Error generating recap.");
       setErrorMessage(msg);
       alert(msg);
     } finally {

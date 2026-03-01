@@ -1,25 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, Video, Send } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, Video, Send, FolderOpen, PlusCircle } from "lucide-react";
 import { api, TranscriptChunk } from "../lib/api";
 import RecapPanel from "./RecapPanel";
 import QAPanel from "./QAPanel";
-import ActionsPanel from "./ActionsPanel";
 import TranscriptViewer from "./TranscriptViewer";
 import TodoPanel from "./TodoPanel";
 import CalendarPanel from "./CalendarPanel";
-import NotesPanel from "./NotesPanel";
 
 interface ZoomModeProps {
   onBack: () => void;
+  initialSessionId?: string;
+  sessions?: string[];
+  onOpenSession?: (sessionId: string) => void;
 }
 
-export default function ZoomMode({ onBack }: ZoomModeProps) {
+function sessionDisplayName(sid: string): string {
+  return sid.replace(/^inperson_/, "").replace(/^zoom_/, "") || sid;
+}
+
+export default function ZoomMode({ onBack, initialSessionId, sessions = [], onOpenSession }: ZoomModeProps) {
   const [sessionId, setSessionId] = useState("");
   const [meetingId, setMeetingId] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [transcriptInput, setTranscriptInput] = useState("");
+  const [transcriptRefreshTrigger, setTranscriptRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    if (initialSessionId && initialSessionId.startsWith("zoom_")) {
+      setSessionId(initialSessionId);
+      setMeetingId(sessionDisplayName(initialSessionId));
+      setIsConnected(true);
+    }
+  }, [initialSessionId]);
+
+  const startNewSession = () => {
+    setSessionId("");
+    setMeetingId("");
+    setIsConnected(false);
+    setTranscriptRefreshTrigger((t) => t + 1);
+  };
 
   const handleConnect = async () => {
     if (!meetingId.trim()) return;
@@ -42,6 +63,7 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
 
     await api.ingestTranscript(sessionId, "zoom", [chunk]);
     setTranscriptInput("");
+    setTranscriptRefreshTrigger((t) => t + 1);
   };
 
   return (
@@ -71,40 +93,86 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
 
         {/* Connection Panel */}
         {!isConnected ? (
-          <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Connect to Zoom Meeting
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Enter your Zoom meeting ID to start receiving real-time
-              transcripts.
-            </p>
-            <div className="space-y-4">
-              <input
-                type="text"
-                value={meetingId}
-                onChange={(e) => setMeetingId(e.target.value)}
-                placeholder="Enter Zoom Meeting ID"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button
-                onClick={handleConnect}
-                disabled={!meetingId.trim()}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                Connect to Meeting
-              </button>
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="bg-white rounded-xl shadow-lg p-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Connect to a meeting
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Enter your Zoom meeting ID to start, or open a previous session below.
+              </p>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={meetingId}
+                  onChange={(e) => setMeetingId(e.target.value)}
+                  placeholder="e.g. 123-456-7890"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  onClick={handleConnect}
+                  disabled={!meetingId.trim()}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Connect to Meeting
+                </button>
+              </div>
             </div>
+            {sessions.filter((s) => s.startsWith("zoom_")).length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <FolderOpen className="w-5 h-5 text-blue-600" />
+                  Open a previous session
+                </h3>
+                <ul className="space-y-2">
+                  {sessions.filter((s) => s.startsWith("zoom_")).map((sid) => (
+                    <li key={sid}>
+                      <button
+                        onClick={() => onOpenSession?.(sid)}
+                        className="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-50 font-medium text-gray-900"
+                      >
+                        {sessionDisplayName(sid)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Status */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse" />
-                <span className="text-green-800 font-medium">
-                  Connected to Meeting {meetingId}
-                </span>
+            {/* Status + session switcher */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
+                  <span className="text-blue-800 font-medium">
+                    Meeting: {meetingId || sessionDisplayName(sessionId)}
+                  </span>
+                  <button
+                    onClick={startNewSession}
+                    type="button"
+                    className="flex items-center gap-1 text-sm text-blue-700 hover:text-blue-900 font-medium"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    New session
+                  </button>
+                </div>
+                {sessions.filter((s) => s.startsWith("zoom_") && s !== sessionId).length > 0 && (
+                  <div className="flex items-center gap-1 text-sm">
+                    <FolderOpen className="w-4 h-4 text-blue-600" />
+                    <select
+                      className="bg-white border border-blue-300 rounded-lg px-2 py-1.5 text-blue-800 font-medium"
+                      value=""
+                      onChange={(e) => { const v = e.target.value; if (v) onOpenSession?.(v); e.target.value = ""; }}
+                    >
+                      <option value="">Switch session…</option>
+                      {sessions.filter((s) => s.startsWith("zoom_") && s !== sessionId).map((sid) => (
+                        <option key={sid} value={sid}>{sessionDisplayName(sid)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -137,7 +205,7 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
             {/* Main Content */}
             <div className="space-y-6">
               {/* Top Row: Transcript */}
-              <TranscriptViewer sessionId={sessionId} />
+              <TranscriptViewer sessionId={sessionId} refreshTrigger={transcriptRefreshTrigger} />
 
               {/* Middle Row: Recap and Q&A */}
               <div className="grid lg:grid-cols-2 gap-6">
@@ -145,16 +213,10 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
                 <QAPanel sessionId={sessionId} />
               </div>
 
-              {/* Bottom Row: Todos, Calendar, Notes, Actions */}
+              {/* Bottom Row: Todos, Calendar */}
               <div className="grid lg:grid-cols-2 gap-6">
-                <div className="space-y-6">
-                  <TodoPanel sessionId={sessionId} />
-                  <CalendarPanel sessionId={sessionId} />
-                </div>
-                <div className="space-y-6">
-                  <NotesPanel sessionId={sessionId} />
-                  <ActionsPanel sessionId={sessionId} />
-                </div>
+                <TodoPanel sessionId={sessionId} />
+                <CalendarPanel sessionId={sessionId} />
               </div>
             </div>
           </div>

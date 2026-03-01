@@ -66,6 +66,8 @@ def startup_log():
     openai_set = bool(getattr(settings, "openai_api_key", None) and (settings.openai_api_key or "").strip())
     logger.info("Recap: %s", "local (Ollama)" if (recap_local and ollama_ok) else ("local (extractive)" if recap_local else ("OpenAI" if openai_set else "Gemini")))
     logger.info("Q&A: %s (evidence-based, 2-5 quotes)", "local (Ollama)" if (qa_local and ollama_ok) else ("local (synthesis)" if qa_local else "Gemini"))
+    embed_local = getattr(settings, "embeddings_use_local", True)
+    logger.info("Embeddings: %s (ingest/retrieval)", "local (no API)" if embed_local else "Gemini")
 
 # CORS: allow all origins in dev so frontend can reach backend from any URL
 app.add_middleware(
@@ -95,6 +97,8 @@ def ingest_transcript(request: IngestTranscriptRequest):
     Supports both Zoom and in-person modes.
     """
     try:
+        if not request.chunks:
+            return {"status": "success", "session_id": request.session_id, "chunks_ingested": 0}
         logger.info(f"Ingesting {len(request.chunks)} chunks for session {request.session_id} (mode: {request.mode})")
         vector_store.add_chunks(request.session_id, request.chunks)
         return {
@@ -102,8 +106,10 @@ def ingest_transcript(request: IngestTranscriptRequest):
             "session_id": request.session_id,
             "chunks_ingested": len(request.chunks)
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error ingesting transcript: {e}")
+        logger.exception("Error ingesting transcript")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -210,8 +216,8 @@ def zoom_webhook(payload: ZoomWebhookPayload):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Allow lecture-length uploads (e.g. 60–120 min); 300MB max for audio or video
-MAX_MEDIA_UPLOAD_BYTES = 300 * 1024 * 1024
+# Allow lecture-length uploads (e.g. 1–2 hr); 400MB max for in-person WAV (1 hr @ 48kHz ≈ 330MB)
+MAX_MEDIA_UPLOAD_BYTES = 400 * 1024 * 1024
 
 
 @app.post("/api/audio/upload")
@@ -250,6 +256,17 @@ async def upload_audio(request: Request, session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/sessions")
+def list_sessions():
+    """List all session IDs that have transcript data (for session list / reopen)."""
+    try:
+        session_ids = vector_store.list_session_ids()
+        return {"session_ids": session_ids}
+    except Exception as e:
+        logger.error(f"Error listing sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/api/session/{session_id}")
 def delete_session(session_id: str):
     """Delete a session and all its data."""
@@ -268,15 +285,12 @@ def delete_session(session_id: str):
 
 @app.get("/api/transcript/{session_id}", response_model=TranscriptResponse)
 def get_transcript(session_id: str):
-    """Get full transcript for a session."""
+    """Get full transcript for a session. Returns empty chunks when none yet (e.g. before first record/upload)."""
     try:
         logger.info(f"Getting transcript for session {session_id}")
         chunks = vector_store.get_all_chunks(session_id)
         
-        if not chunks:
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        # Calculate total duration
+        # No chunks yet is valid (session just started); return 200 with empty list
         last_timestamp = chunks[-1]["timestamp"] if chunks else "00:00:00"
         
         from app.models import TranscriptChunk

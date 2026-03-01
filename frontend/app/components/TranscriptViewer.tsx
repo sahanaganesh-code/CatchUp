@@ -2,16 +2,22 @@
 
 import { useState, useEffect } from "react";
 import { FileText, Download, Loader2 } from "lucide-react";
-import { api, TranscriptChunk } from "../lib/api";
+import { api, getApiErrorMessage, TranscriptChunk } from "../lib/api";
 
 interface TranscriptViewerProps {
   sessionId: string;
+  /** When this value changes, transcript is refetched (e.g. for live updates during recording). */
+  refreshTrigger?: number;
 }
 
-export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
+export default function TranscriptViewer({ sessionId, refreshTrigger }: TranscriptViewerProps) {
   const [transcript, setTranscript] = useState<TranscriptChunk[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalDuration, setTotalDuration] = useState("00:00:00");
+
+  useEffect(() => {
+    if (sessionId) loadTranscript();
+  }, [sessionId, refreshTrigger]);
 
   const loadTranscript = async () => {
     setLoading(true);
@@ -21,7 +27,7 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
       setTotalDuration(response.total_duration);
     } catch (error) {
       console.error("Error loading transcript:", error);
-      alert("Error loading transcript");
+      alert(getApiErrorMessage(error, "Error loading transcript."));
     } finally {
       setLoading(false);
     }
@@ -29,7 +35,7 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
 
   const exportTranscript = () => {
     const text = transcript
-      .map((chunk) => `[${chunk.timestamp}] ${chunk.speaker || "Speaker"}: ${chunk.text}`)
+      .map((chunk) => `[${chunk.timestamp}] ${chunk.text}`)
       .join("\n\n");
 
     const blob = new Blob([text], { type: "text/plain" });
@@ -94,11 +100,6 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
                   [{chunk.timestamp}]
                 </span>
                 <div className="flex-1">
-                  {chunk.speaker && (
-                    <span className="font-semibold text-gray-900">
-                      {chunk.speaker}:{" "}
-                    </span>
-                  )}
                   <span className="text-gray-700">{chunk.text}</span>
                 </div>
               </div>

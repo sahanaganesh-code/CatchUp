@@ -21,17 +21,33 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
     context_parts = []
     all_evidence = []
     
-    # Search transcripts
+    # Search transcripts across all sessions
     if "transcripts" in context_types:
-        # Get all sessions and search across them
-        # For MVP, we'll search recent chunks
-        # In production, maintain a session index
         try:
-            # This is a simplified approach - in production, track all session IDs
-            logger.info("Searching transcripts...")
-            context_parts.append("=== MEETING TRANSCRIPTS ===")
-            # For now, we'll note this limitation
-            context_parts.append("(Transcript search requires session_id - use Q&A panel for specific sessions)")
+            logger.info("Searching transcripts across all sessions...")
+            session_ids = vector_store.list_session_ids()
+            if session_ids:
+                context_parts.append("=== MEETING TRANSCRIPTS (all sessions) ===")
+                per_session = max(2, 10 // max(1, len(session_ids)))
+                for sid in session_ids[:20]:
+                    chunks = vector_store.query_chunks_by_keywords(sid, question, top_k=per_session)
+                    if not chunks:
+                        chunks = vector_store.query_chunks(sid, question, top_k=per_session)
+                    if chunks:
+                        label = sid.replace("inperson_", "").replace("zoom_", "") or sid
+                        context_parts.append(f"\n--- Session: {label} ---")
+                        for c in chunks:
+                            ts = c.get("timestamp", "")
+                            text = (c.get("text") or "")[:400]
+                            context_parts.append(f"[{ts}] {text}")
+                            all_evidence.append(Evidence(
+                                timestamp=ts,
+                                quote=text[:200],
+                                speaker=f"Session {label}"
+                            ))
+            else:
+                context_parts.append("=== MEETING TRANSCRIPTS ===")
+                context_parts.append("(No sessions with transcripts yet. Record or upload to add.)")
         except Exception as e:
             logger.error(f"Error searching transcripts: {e}")
     

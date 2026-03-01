@@ -21,8 +21,8 @@ class GeminiQuotaExceeded(Exception):
 # Set environment variable to use REST instead of gRPC
 os.environ['GOOGLE_API_USE_CLIENT_CERTIFICATE'] = 'false'
 
-# Configure Gemini with API key
-genai.configure(api_key=settings.gemini_api_key, transport='rest')
+# Configure Gemini with API key (allow None when using local embeddings/recap/QA only)
+genai.configure(api_key=settings.gemini_api_key or "no-key", transport='rest')
 
 
 def embed_texts(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
@@ -46,10 +46,14 @@ def embed_texts(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list
             task_type=task_type
         )
         
-        # result['embedding'] contains the embeddings
-        embeddings = result['embedding']
-        logger.info(f"Successfully generated {len(embeddings)} embeddings")
-        return embeddings
+        # result['embedding']: single text -> 1D list; multiple texts -> list of lists
+        raw = result['embedding']
+        if not raw:
+            return []
+        if isinstance(raw[0], (int, float)):
+            raw = [raw]
+        logger.info(f"Successfully generated {len(raw)} embeddings")
+        return raw
     
     except Exception as e:
         logger.error(f"Error generating embeddings: {e}")

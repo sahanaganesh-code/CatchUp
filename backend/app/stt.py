@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 # Above this size (bytes) we use GCS + batch_recognize for long audio (no ffmpeg)
 LONG_AUDIO_SIZE_THRESHOLD = 1 * 1024 * 1024  # 1 MB
 
+# Sync recognize limit: 60 seconds. Use 40 sec per chunk so recordings >40s (e.g. 45s) are chunked and work.
+# For 16kHz mono LINEAR16: 40 * 16000 * 2 = 1_280_000 bytes per segment. Supports hour-long lectures.
+SYNC_MAX_BYTES_16K_MONO = 40 * 16000 * 2
+
 DEFAULT_AUDIO_MIME = "audio/mpeg"
 
 # Cloud Speech-to-Text: project ID from .env (via settings) or os.environ
@@ -49,6 +53,34 @@ def _seconds_to_hhmmss(seconds: float) -> str:
     h, s = divmod(s, 3600)
     m, s = divmod(s, 60)
     return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _hhmmss_to_seconds(timestamp: str) -> float:
+    """Parse HH:MM:SS (or H:MM:SS, MM:SS) to float seconds."""
+    if not timestamp or not timestamp.strip():
+        return 0.0
+    parts = timestamp.strip().split(":")
+    if len(parts) == 3:
+        h, m, s = int(parts[0] or 0), int(parts[1] or 0), float(parts[2] or 0)
+    elif len(parts) == 2:
+        h, m, s = 0, int(parts[0] or 0), float(parts[1] or 0)
+    else:
+        return 0.0
+    return h * 3600 + m * 60 + s
+
+
+def _duration_to_seconds(obj) -> float:
+    """Convert protobuf Duration (seconds+nanos) or datetime.timedelta to float seconds."""
+    if obj is None:
+        return 0.0
+    if hasattr(obj, "total_seconds"):
+        return float(obj.total_seconds())
+    sec = getattr(obj, "seconds", 0) or 0
+    if hasattr(obj, "nanos"):
+        return sec + (getattr(obj, "nanos", 0) or 0) / 1e9
+    if hasattr(obj, "microseconds"):
+        return sec + (getattr(obj, "microseconds", 0) or 0) / 1e6
+    return float(sec)
 
 
 def _transcribe_long_audio_via_gcs(
@@ -118,11 +150,9 @@ def _transcribe_long_audio_via_gcs(
                     if words:
                         w0 = words[0]
                         if hasattr(w0, "start_offset") and getattr(w0, "start_offset", None):
-                            so = w0.start_offset
-                            s = (getattr(so, "seconds", 0) or 0) + (getattr(so, "nanos", 0) or 0) / 1e9
-                            ts = _seconds_to_hhmmss(s)
+                            ts = _seconds_to_hhmmss(_duration_to_seconds(w0.start_offset))
                         elif hasattr(w0, "start_time") and getattr(w0, "start_time", None):
-                            ts = _seconds_to_hhmmss(w0.start_time.total_seconds())
+                            ts = _seconds_to_hhmmss(_duration_to_seconds(w0.start_time))
                     chunks.append(TranscriptChunk(timestamp=ts, text=text, speaker=None))
         if chunks:
             logger.info(f"Batch recognize returned {len(chunks)} chunks")
@@ -137,23 +167,26 @@ def _transcribe_with_cloud_speech(
     audio_content: bytes,
     file_path: Optional[str] = None,
     mime_type: Optional[str] = None,
+    *,
+    explicit_linear16: bool = False,
 ) -> tuple[List[TranscriptChunk], Optional[str]]:
     """
-    Transcribe using Google Cloud Speech-to-Text (v2).
+    Transcribe using Google Cloud Speech-to-Text (v2). No Gemini.
     Long audio (>~1 min / >1MB): upload to GCS and use batch_recognize (set GOOGLE_CLOUD_STT_BUCKET).
     Short audio: sync recognize (60s limit).
+    When explicit_linear16=True, audio_content is raw PCM s16le 16kHz mono; use ExplicitDecodingConfig.
     Returns (chunks, error_message).
     """
     project = _get_cloud_project()
     if not project:
         return [], "GOOGLE_CLOUD_PROJECT not set (check .env)"
 
-    # Long audio: use GCS + batch (no ffmpeg needed)
+    # Long audio: GCS path only for non-PCM (e.g. MP3). Raw PCM (explicit_linear16) must use chunked sync below.
     bucket = (getattr(settings, "google_cloud_stt_bucket", None) or os.environ.get("GOOGLE_CLOUD_STT_BUCKET") or "").strip()
-    if len(audio_content) > LONG_AUDIO_SIZE_THRESHOLD and bucket:
+    if not explicit_linear16 and len(audio_content) > LONG_AUDIO_SIZE_THRESHOLD and bucket:
         return _transcribe_long_audio_via_gcs(audio_content, bucket, project)
 
-    if len(audio_content) > LONG_AUDIO_SIZE_THRESHOLD and not bucket:
+    if not explicit_linear16 and len(audio_content) > LONG_AUDIO_SIZE_THRESHOLD and not bucket:
         return [], "Audio is too long for sync recognition (60s limit). Set GOOGLE_CLOUD_STT_BUCKET in .env and create a GCS bucket for long lectures (no ffmpeg needed). See backend/GOOGLE_VERIFY.md."
 
     try:
@@ -161,38 +194,87 @@ def _transcribe_with_cloud_speech(
         from google.cloud.speech_v2.types import cloud_speech
 
         client = SpeechClient()
-        config = cloud_speech.RecognitionConfig(
-            auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
-            language_codes=["en-US"],
-            model="long",
-            features=cloud_speech.RecognitionFeatures(enable_word_time_offsets=True),
-        )
-        request = cloud_speech.RecognizeRequest(
-            recognizer=f"projects/{project}/locations/global/recognizers/_",
-            config=config,
-            content=audio_content,
-        )
-        response = client.recognize(request=request)
-        chunks = []
-        for result in response.results:
-            if not result.alternatives:
-                continue
-            alt = result.alternatives[0]
-            transcript = (alt.transcript or "").strip()
-            if not transcript:
-                continue
-            total_sec = 0.0
-            if alt.words:
-                first = alt.words[0]
-                if hasattr(first, "start_offset") and first.start_offset:
-                    total_sec = first.start_offset.seconds + (first.start_offset.nanos or 0) / 1e9
-                elif hasattr(first, "start_time") and first.start_time:
-                    total_sec = first.start_time.total_seconds()
-            chunks.append(
-                TranscriptChunk(timestamp=_seconds_to_hhmmss(total_sec), text=transcript, speaker=None)
+        recognizer = f"projects/{project}/locations/global/recognizers/_"
+
+        def run_sync(content: bytes, time_offset_sec: float = 0.0) -> List[TranscriptChunk]:
+            if explicit_linear16:
+                decoding = cloud_speech.ExplicitDecodingConfig(
+                    encoding=cloud_speech.ExplicitDecodingConfig.AudioEncoding.LINEAR16,
+                    sample_rate_hertz=16000,
+                    audio_channel_count=1,
+                )
+                config = cloud_speech.RecognitionConfig(
+                    explicit_decoding_config=decoding,
+                    language_codes=["en-US"],
+                    model="long",
+                    features=cloud_speech.RecognitionFeatures(enable_word_time_offsets=True),
+                )
+            else:
+                config = cloud_speech.RecognitionConfig(
+                    auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
+                    language_codes=["en-US"],
+                    model="long",
+                    features=cloud_speech.RecognitionFeatures(enable_word_time_offsets=True),
+                )
+            request = cloud_speech.RecognizeRequest(
+                recognizer=recognizer,
+                config=config,
+                content=content,
             )
+            response = client.recognize(request=request)
+            out = []
+            for result in getattr(response, "results", None) or []:
+                alts = getattr(result, "alternatives", None) or []
+                if not alts:
+                    continue
+                alt = alts[0]
+                transcript = (getattr(alt, "transcript", None) or "").strip()
+                if not transcript:
+                    continue
+                total_sec = time_offset_sec
+                words = getattr(alt, "words", None) or []
+                if words:
+                    first = words[0]
+                    if hasattr(first, "start_offset") and first.start_offset:
+                        total_sec = time_offset_sec + _duration_to_seconds(first.start_offset)
+                    elif hasattr(first, "start_time") and first.start_time:
+                        total_sec = time_offset_sec + _duration_to_seconds(first.start_time)
+                out.append(
+                    TranscriptChunk(timestamp=_seconds_to_hhmmss(total_sec), text=transcript, speaker=None)
+                )
+            return out
+
+        chunks = []
+        segment_duration_sec = SYNC_MAX_BYTES_16K_MONO / (16000 * 2)
+        if explicit_linear16 and len(audio_content) > SYNC_MAX_BYTES_16K_MONO:
+            num_segments = (len(audio_content) + SYNC_MAX_BYTES_16K_MONO - 1) // SYNC_MAX_BYTES_16K_MONO
+            logger.info("Chunking %d bytes (~%d min) into %d segments of max %.0f sec each",
+                       len(audio_content), len(audio_content) // (16000 * 2 * 60), num_segments, segment_duration_sec)
+            offset = 0
+            segment_index = 0
+            while offset < len(audio_content):
+                end = min(offset + SYNC_MAX_BYTES_16K_MONO, len(audio_content))
+                segment = audio_content[offset:end]
+                time_offset_sec = segment_index * segment_duration_sec
+                try:
+                    seg_chunks = run_sync(segment, time_offset_sec)
+                    chunks.extend(seg_chunks)
+                    logger.info("Segment %d/%d (%d–%d bytes): %d chunks",
+                                segment_index + 1, num_segments, offset, end, len(seg_chunks))
+                except Exception as seg_err:
+                    logger.warning("Segment %d failed: %s (continuing with other segments)", segment_index + 1, seg_err)
+                offset = end
+                segment_index += 1
+        else:
+            chunks = run_sync(audio_content, 0.0)
+
         if chunks:
-            logger.info(f"Cloud Speech-to-Text returned {len(chunks)} chunks")
+            logger.info(f"Cloud Speech-to-Text returned {len(chunks)} chunks total")
+        elif not (explicit_linear16 and len(audio_content) > SYNC_MAX_BYTES_16K_MONO):
+            logger.warning(
+                "Cloud Speech-to-Text returned no results for %d bytes of audio",
+                len(audio_content),
+            )
         return chunks, None
     except Exception as e:
         err = str(e)
@@ -272,49 +354,212 @@ VIDEO_CONTENT_TYPES = {"video/mp4", "video/webm", "video/quicktime", "video/x-ms
 
 
 def transcribe_audio(session_id: str, audio_file_path: str) -> List[TranscriptChunk]:
-    """Transcribe audio file: Cloud STT (primary), Gemini fallback."""
+    """Transcribe audio file using Cloud Speech-to-Text only (no Gemini)."""
     logger.info(f"Transcribing audio for session {session_id}: {audio_file_path}")
-    ext = os.path.splitext(audio_file_path)[1].lower()
-    mime = AUDIO_MIME_TYPES.get(ext, DEFAULT_AUDIO_MIME)
     with open(audio_file_path, "rb") as f:
         audio_content = f.read()
     chunks, _ = _transcribe_with_cloud_speech(audio_content)
-    if not chunks:
-        chunks, _ = _transcribe_with_gemini(audio_file_path, mime)
-    return chunks
+    return chunks or []
 
 
 def transcribe_audio_bytes(
     audio_data: bytes,
     mime_type: str = DEFAULT_AUDIO_MIME,
+    filename: str = "",
 ) -> tuple[List[TranscriptChunk], str]:
     """
-    Transcribe raw audio bytes: Cloud STT (primary), Gemini fallback.
-    Long audio (>60s) is chunked automatically (needs pydub + ffmpeg).
-    Returns (chunks, error_detail). error_detail is non-empty when both fail.
+    Transcribe raw audio bytes using Cloud Speech-to-Text only (no Gemini).
+    Browser audio/webm is converted to raw LINEAR16 (16kHz mono) via ffmpeg for Cloud STT.
+    Treat as webm if mime is audio/webm OR filename ends with .webm (browser may omit content-type).
+    Returns (chunks, error_detail).
     """
-    suffix = ".mp3"
-    for ext, m in AUDIO_MIME_TYPES.items():
-        if m == mime_type:
-            suffix = ext
-            break
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-        f.write(audio_data)
-        path = f.name
+    data_to_use = audio_data
+    mime_to_use = mime_type
+    use_explicit_linear16 = False
+    path_to_use: Optional[str] = None
+
+    ct = (mime_type or "").strip().lower()
+    fn = (filename or "").lower()
+    is_wav = ct.startswith("audio/wav") or fn.endswith(".wav")
+    is_webm = ct.startswith("audio/webm") or fn.endswith(".webm")
+
+    if is_wav:
+        logger.info("WAV audio detected (browser recording), converting to LINEAR16 for Cloud STT")
+        pcm_bytes, conv_err = _convert_wav_to_linear16(audio_data)
+        if pcm_bytes:
+            if len(pcm_bytes) < 16000:
+                return [], "Recording too short. Record at least 1 second of speech."
+            data_to_use = pcm_bytes
+            use_explicit_linear16 = True
+        else:
+            return [], f"Convert WAV to audio failed: {conv_err}"
+    elif is_webm:
+        logger.info("Webm audio detected (mime=%s, filename=%s), converting to LINEAR16/MP3 for Cloud STT", mime_type, filename)
+        bucket = (getattr(settings, "google_cloud_stt_bucket", None) or os.environ.get("GOOGLE_CLOUD_STT_BUCKET") or "").strip()
+        if len(audio_data) > LONG_AUDIO_SIZE_THRESHOLD and bucket:
+            mp3_bytes, conv_err = _convert_webm_to_mp3(audio_data)
+            if mp3_bytes:
+                data_to_use = mp3_bytes
+                mime_to_use = "audio/mpeg"
+            else:
+                return [], f"Convert webm to mp3 failed: {conv_err}"
+        elif len(audio_data) > LONG_AUDIO_SIZE_THRESHOLD:
+            return [], "Long webm not supported for sync. Set GOOGLE_CLOUD_STT_BUCKET in .env for long recordings."
+        else:
+            pcm_bytes, conv_err = _convert_webm_to_linear16(audio_data)
+            if pcm_bytes:
+                # Cloud STT needs at least ~0.5s of 16kHz mono s16le (16000 bytes)
+                if len(pcm_bytes) < 16000:
+                    return [], "Recording too short. Record at least 1 second of speech."
+                data_to_use = pcm_bytes
+                use_explicit_linear16 = True
+            else:
+                return [], f"Convert webm to audio failed: {conv_err}"
+
+    if path_to_use is None and not use_explicit_linear16:
+        suffix = ".mp3"
+        for ext, m in AUDIO_MIME_TYPES.items():
+            if m == mime_type:
+                suffix = ext
+                break
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+            f.write(audio_data)
+            path_to_use = f.name
+
     try:
-        chunks, err1 = _transcribe_with_cloud_speech(audio_data, file_path=path, mime_type=mime_type)
+        chunks, err = _transcribe_with_cloud_speech(
+            data_to_use,
+            file_path=path_to_use,
+            mime_type=mime_to_use,
+            explicit_linear16=use_explicit_linear16,
+        )
         if chunks:
             return chunks, ""
-        chunks, err2 = _transcribe_with_gemini(path, mime_type)
-        if chunks:
-            return chunks, ""
-        detail = "Cloud STT: " + (err1 or "no text") + ". Gemini: " + (err2 or "no text")
-        return [], detail
+        return [], err or "No speech detected in the recording. Try again with clear speech and minimal background noise."
     finally:
         try:
-            os.unlink(path)
+            if path_to_use and os.path.isfile(path_to_use):
+                os.unlink(path_to_use)
         except OSError:
             pass
+
+
+def _convert_webm_to_mp3(audio_data: bytes) -> Tuple[Optional[bytes], str]:
+    """Convert audio/webm to MP3 for GCS long-audio path. Returns (mp3_bytes, error_message)."""
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+        f.write(audio_data)
+        in_path = f.name
+    out_path = in_path + ".mp3"
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", in_path, "-vn", "-acodec", "libmp3lame", "-q:a", "2", out_path],
+            capture_output=True,
+            timeout=300,
+            text=True,
+        )
+        if result.returncode != 0:
+            return None, (result.stderr or "")[-500:].strip() or "ffmpeg failed"
+        if os.path.isfile(out_path):
+            with open(out_path, "rb") as f:
+                return f.read(), ""
+        return None, "ffmpeg produced no output"
+    except FileNotFoundError:
+        return None, "ffmpeg not found."
+    except subprocess.TimeoutExpired:
+        return None, "ffmpeg timed out"
+    except Exception as e:
+        return None, str(e)
+    finally:
+        for p in (in_path, out_path):
+            try:
+                if os.path.isfile(p):
+                    os.unlink(p)
+            except OSError:
+                pass
+
+
+def _convert_wav_to_linear16(audio_data: bytes) -> Tuple[Optional[bytes], str]:
+    """
+    Convert WAV (any sample rate/channels) to raw LINEAR16 16kHz mono for Cloud STT.
+    Returns (pcm_bytes, error_message). Used for browser WAV recordings.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        f.write(audio_data)
+        in_path = f.name
+    out_path = in_path + ".raw"
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", in_path,
+                "-vn", "-f", "s16le", "-ar", "16000", "-ac", "1",
+                out_path,
+            ],
+            capture_output=True,
+            timeout=600,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "")[-500:]
+            return None, stderr.strip() or "ffmpeg conversion failed"
+        if os.path.isfile(out_path):
+            with open(out_path, "rb") as f:
+                return f.read(), ""
+        return None, "ffmpeg produced no output"
+    except FileNotFoundError:
+        return None, "ffmpeg not found. Install ffmpeg (e.g. brew install ffmpeg)."
+    except subprocess.TimeoutExpired:
+        return None, "ffmpeg conversion timed out (10 min limit for long lectures)"
+    except Exception as e:
+        return None, str(e)
+    finally:
+        for p in (in_path, out_path):
+            try:
+                if os.path.isfile(p):
+                    os.unlink(p)
+            except OSError:
+                pass
+
+
+def _convert_webm_to_linear16(audio_data: bytes) -> Tuple[Optional[bytes], str]:
+    """
+    Convert browser-recorded audio/webm to raw LINEAR16 (16kHz mono, no header) for Cloud STT.
+    Returns (pcm_bytes, error_message). Cloud STT requires explicit decoding for reliable results.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+        f.write(audio_data)
+        in_path = f.name
+    out_path = in_path + ".raw"
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", in_path,
+                "-vn", "-f", "s16le", "-ar", "16000", "-ac", "1",
+                out_path,
+            ],
+            capture_output=True,
+            timeout=120,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "")[-500:]
+            return None, stderr.strip() or "ffmpeg conversion failed"
+        if os.path.isfile(out_path):
+            with open(out_path, "rb") as f:
+                return f.read(), ""
+        return None, "ffmpeg produced no output"
+    except FileNotFoundError:
+        return None, "ffmpeg not found. Install ffmpeg (e.g. brew install ffmpeg)."
+    except subprocess.TimeoutExpired:
+        return None, "ffmpeg conversion timed out"
+    except Exception as e:
+        return None, str(e)
+    finally:
+        for p in (in_path, out_path):
+            try:
+                if os.path.isfile(p):
+                    os.unlink(p)
+            except OSError:
+                pass
 
 
 def _extract_audio_from_video(video_data: bytes, video_suffix: str) -> Tuple[Optional[bytes], str, str]:
@@ -338,7 +583,7 @@ def _extract_audio_from_video(video_data: bytes, video_suffix: str) -> Tuple[Opt
             result = subprocess.run(
                 ["ffmpeg", "-y", "-i", video_path] + args + [out_file],
                 capture_output=True,
-                timeout=600,
+                timeout=1800,
                 text=True,
             )
             if result.returncode != 0:
@@ -351,7 +596,7 @@ def _extract_audio_from_video(video_data: bytes, video_suffix: str) -> Tuple[Opt
         except FileNotFoundError:
             return None, "ffmpeg not found in PATH. Install ffmpeg (e.g. brew install ffmpeg) and restart the backend."
         except subprocess.TimeoutExpired:
-            return None, "ffmpeg timed out. Try a shorter video."
+            return None, "ffmpeg timed out (30 min limit). Try a shorter video or compress the file."
         except Exception as e:
             return None, str(e)
 
@@ -375,25 +620,58 @@ def _extract_audio_from_video(video_data: bytes, video_suffix: str) -> Tuple[Opt
 
 
 def _is_video(filename: str, content_type: Optional[str]) -> bool:
-    if content_type and content_type.split(";")[0].strip().lower() in VIDEO_CONTENT_TYPES:
-        return True
+    # Explicit audio/* (e.g. audio/webm from browser recorder) is never video
+    if content_type:
+        ct = content_type.split(";")[0].strip().lower()
+        if ct.startswith("audio/"):
+            return False
+        if ct in VIDEO_CONTENT_TYPES:
+            return True
     ext = os.path.splitext(filename or "")[1].lower()
     return ext in VIDEO_EXTENSIONS
 
 
 def process_audio_upload(
-    session_id: str, audio_data: bytes, mime_type: Optional[str] = None
+    session_id: str,
+    audio_data: bytes,
+    mime_type: Optional[str] = None,
+    filename: Optional[str] = None,
 ) -> tuple[bool, str]:
     """
-    Process uploaded audio: transcribe with Cloud Speech-to-Text (primary) or Gemini,
-    then add chunks to the vector store.
+    Process uploaded audio: transcribe with Cloud Speech-to-Text only.
+    When the session already has chunks (e.g. live segments), new chunk timestamps
+    are offset by the current session duration so timestamps and total_duration stay correct.
     Returns (success, message).
     """
-    logger.info(f"Processing audio upload for session {session_id} (Google Cloud STT primary)")
+    logger.info(f"Processing audio upload for session {session_id} (Google Cloud STT)")
     try:
-        chunks, detail = transcribe_audio_bytes(audio_data, mime_type=mime_type or DEFAULT_AUDIO_MIME)
+        chunks, detail = transcribe_audio_bytes(
+            audio_data,
+            mime_type=mime_type or DEFAULT_AUDIO_MIME,
+            filename=filename or "",
+        )
         if not chunks:
             return False, detail or "Transcription returned no text."
+
+        existing = vector_store.get_all_chunks(session_id)
+        offset_sec = 0.0
+        if existing:
+            for c in existing:
+                t = _hhmmss_to_seconds(c["timestamp"])
+                if t > offset_sec:
+                    offset_sec = t
+        if offset_sec > 0:
+            from app.models import TranscriptChunk
+            chunks = [
+                TranscriptChunk(
+                    timestamp=_seconds_to_hhmmss(_hhmmss_to_seconds(c.timestamp) + offset_sec),
+                    text=c.text,
+                    speaker=c.speaker,
+                )
+                for c in chunks
+            ]
+            logger.info(f"Offset new segment by {offset_sec:.0f}s for cumulative timestamps")
+
         vector_store.add_chunks(session_id=session_id, chunks=chunks)
         logger.info(f"Added {len(chunks)} transcript chunks to vector store")
         return True, ""
@@ -430,7 +708,9 @@ def process_media_upload(
                 return False, extract_err or "Could not extract audio from video. Is ffmpeg installed?"
             from app.video_vision import extract_visual_chunks
             visual_chunks = extract_visual_chunks(video_path) if video_path and os.path.isfile(video_path) else []
-            success, msg = process_audio_upload(session_id, audio_data, mime_type=audio_mime or "audio/mpeg")
+            success, msg = process_audio_upload(
+                session_id, audio_data, mime_type=audio_mime or "audio/mpeg", filename=filename
+            )
             if not success:
                 return False, msg
             if visual_chunks:
@@ -443,7 +723,9 @@ def process_media_upload(
                     os.unlink(video_path)
                 except OSError:
                     pass
-    return process_audio_upload(session_id, file_data)
+    return process_audio_upload(
+        session_id, file_data, mime_type=content_type or None, filename=filename
+    )
 
 
 def stream_audio_transcription(session_id: str, audio_stream) -> None:

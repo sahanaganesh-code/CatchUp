@@ -1,13 +1,28 @@
 import chromadb
 import re
+import struct
 from chromadb.config import Settings as ChromaSettings
 from typing import List, Dict, Any, Optional
 import hashlib
 import time
 from app.config import settings
 from app.models import TranscriptChunk
-from app.gemini_client import embed_texts
 import logging
+
+# Match Gemini embedding-001 dimension so we can use same ChromaDB collection (no API call)
+_LOCAL_EMBED_DIM = 3072
+
+
+def _local_placeholder_embeddings(texts: List[str]) -> List[List[float]]:
+    """Deterministic placeholder vectors so we don't call Gemini. Used when embeddings_use_local=True."""
+    out = []
+    need = _LOCAL_EMBED_DIM * 4  # 3072 floats = 12288 bytes
+    for t in texts:
+        h = hashlib.sha256(t.encode()).digest()
+        extended = (h * ((need // len(h)) + 1))[:need]
+        vec = list(struct.unpack(f"{_LOCAL_EMBED_DIM}f", extended))
+        out.append(vec)
+    return out
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +85,9 @@ class VectorStore:
         """Add transcript chunks to the vector store (batch; single embedding call)."""
         if not chunks:
             return
+        chunks = [c for c in chunks if (c.text or "").strip()]
+        if not chunks:
+            return
 
         ids = []
         documents = []
@@ -85,8 +103,13 @@ class VectorStore:
                 "speaker": (chunk.speaker or "Unknown")[:200],  # ChromaDB metadata length limit
             })
 
-        # Single batch embedding call (optimized)
-        embeddings = embed_texts(documents, task_type="RETRIEVAL_DOCUMENT")
+        if getattr(settings, "embeddings_use_local", True):
+            embeddings = _local_placeholder_embeddings(documents)
+            logger.info(f"Added {len(chunks)} chunks for session {session_id} (local embeddings, no API)")
+        else:
+            from app.gemini_client import embed_texts
+            embeddings = embed_texts(documents, task_type="RETRIEVAL_DOCUMENT")
+            logger.info(f"Added {len(chunks)} chunks for session {session_id} with Gemini embeddings")
 
         # ChromaDB add is upsert by id; we use stable ids to avoid duplicates
         self.collection.add(
@@ -95,7 +118,6 @@ class VectorStore:
             embeddings=embeddings,
             metadatas=metadatas,
         )
-        logger.info(f"Added {len(chunks)} chunks for session {session_id} with Gemini embeddings")
 
     def query_chunks(
         self,
@@ -114,6 +136,10 @@ class VectorStore:
                 logger.debug(f"Query cache hit for session {session_id}")
                 return cached
 
+        if getattr(settings, "embeddings_use_local", True):
+            return self.query_chunks_by_keywords(session_id, query_text, top_k)
+
+        from app.gemini_client import embed_texts
         query_embeddings = embed_texts([query_text], task_type="RETRIEVAL_QUERY")
         results = self.collection.query(
             query_embeddings=query_embeddings,
@@ -162,6 +188,17 @@ class VectorStore:
                 scored.append((overlap, c))
         scored.sort(key=lambda x: (-x[0], x[1]["timestamp"]))
         return [c for _, c in scored[:top_k]]
+
+    def list_session_ids(self) -> List[str]:
+        """Return all unique session_ids that have at least one chunk (for session list)."""
+        try:
+            results = self.collection.get(include=["metadatas"])
+            metadatas = results.get("metadatas") or []
+            session_ids = sorted(set(m.get("session_id") for m in metadatas if m.get("session_id")))
+            return session_ids
+        except Exception as e:
+            logger.warning(f"list_session_ids failed: {e}")
+            return []
 
     def get_all_chunks(self, session_id: str) -> List[Dict[str, Any]]:
         """Get all chunks for a session (no embedding; sorted by timestamp)."""

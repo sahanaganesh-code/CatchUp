@@ -1,25 +1,67 @@
 "use client";
 
-import { useState } from "react";
-import { Video, Mic } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Video, Mic, AlertCircle, FolderOpen, Loader2 } from "lucide-react";
 import ZoomMode from "./components/ZoomMode";
 import InPersonMode from "./components/InPersonMode";
-import AIChatbot from "./components/AIChatbot";
+import { checkBackendHealth, api } from "./lib/api";
+
+function sessionDisplayName(sessionId: string): string {
+  return sessionId.replace(/^inperson_/, "").replace(/^zoom_/, "") || sessionId;
+}
+
+function sessionMode(sessionId: string): "zoom" | "in-person" {
+  return sessionId.startsWith("zoom_") ? "zoom" : "in-person";
+}
 
 export default function Home() {
   const [mode, setMode] = useState<"zoom" | "in-person" | null>(null);
+  const [initialSessionId, setInitialSessionId] = useState<string | null>(null);
+  const [backendOk, setBackendOk] = useState<boolean | null>(null);
+  const [sessions, setSessions] = useState<string[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  useEffect(() => {
+    checkBackendHealth().then(({ ok }) => setBackendOk(ok));
+    const t = setInterval(() => checkBackendHealth().then(({ ok }) => setBackendOk(ok)), 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (!backendOk) return;
+    setSessionsLoading(true);
+    api.listSessions().then((r) => { setSessions(r.session_ids || []); setSessionsLoading(false); }).catch(() => setSessionsLoading(false));
+  }, [backendOk]);
+
+  const openSession = (sessionId: string) => {
+    setInitialSessionId(sessionId);
+    setMode(sessionMode(sessionId));
+  };
+
+  const goBack = () => {
+    setMode(null);
+    setInitialSessionId(null);
+  };
 
   if (mode === "zoom") {
-    return <ZoomMode onBack={() => setMode(null)} />;
+    return <ZoomMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} />;
   }
 
   if (mode === "in-person") {
-    return <InPersonMode onBack={() => setMode(null)} />;
+    return <InPersonMode onBack={goBack} initialSessionId={initialSessionId ?? undefined} sessions={sessions} onOpenSession={openSession} />;
   }
 
   return (
     <>
-      <AIChatbot />
+      {backendOk === false && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-xl w-full mx-4 bg-amber-50 border border-amber-300 text-amber-900 rounded-lg px-4 py-3 shadow flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <div className="text-sm">
+            <strong>Backend not connected.</strong> Upload and recap will fail. Start the backend:{" "}
+            <code className="bg-amber-100 px-1 rounded text-xs">cd backend && python -m uvicorn app.main:app --reload --port 8000</code>
+          </div>
+        </div>
+      )}
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-4xl w-full">
         <div className="text-center mb-12">
@@ -72,6 +114,43 @@ export default function Home() {
               Get Started →
             </div>
           </button>
+        </div>
+
+        {/* Your sessions — quick access for ADHD-friendly flow */}
+        <div className="mt-12 w-full max-w-2xl mx-auto">
+          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <FolderOpen className="w-5 h-5 text-indigo-600" />
+            Your sessions
+          </h2>
+          <p className="text-sm text-gray-600 mb-3">
+            Open any session to view transcript, recap, and Q&A.
+          </p>
+          {sessionsLoading ? (
+            <div className="flex items-center gap-2 text-gray-500 text-sm py-4">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading sessions…
+            </div>
+          ) : sessions.length === 0 ? (
+            <p className="text-sm text-gray-500 py-4 bg-gray-50 rounded-xl px-4">
+              No sessions yet. Start a session above (In-Person or Zoom), then record or upload to see it here.
+            </p>
+          ) : (
+            <ul className="space-y-2 bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+              {sessions.map((sid) => (
+                <li key={sid}>
+                  <button
+                    onClick={() => openSession(sid)}
+                    className="w-full text-left px-4 py-3 hover:bg-indigo-50 flex items-center justify-between gap-2 transition-colors"
+                  >
+                    <span className="font-medium text-gray-900 truncate">{sessionDisplayName(sid)}</span>
+                    <span className="text-xs text-gray-500 shrink-0">
+                      {sid.startsWith("zoom_") ? "Zoom" : "In-person"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="mt-12 text-center">

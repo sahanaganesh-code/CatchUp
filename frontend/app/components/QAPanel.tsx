@@ -1,17 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { MessageCircle, Send, Loader2 } from "lucide-react";
-import { api, QuestionResponse } from "../lib/api";
+import { MessageCircle, Send, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { api, getApiErrorMessage, QuestionResponse } from "../lib/api";
 import EvidenceList from "./EvidenceList";
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  const err = error as { response?: { data?: { detail?: string; error?: string } } };
-  const data = err?.response?.data;
-  if (data?.detail && typeof data.detail === "string") return data.detail;
-  if (data?.error && typeof data.error === "string") return data.error;
-  return fallback;
-}
 
 interface QAPanelProps {
   sessionId: string;
@@ -27,6 +19,7 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
   const [qaHistory, setQaHistory] = useState<QAItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [expandedEvidence, setExpandedEvidence] = useState<Set<number>>(new Set());
 
   const handleAskQuestion = async () => {
     if (!question.trim()) return;
@@ -41,7 +34,7 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
       setQaHistory([...qaHistory, { question: currentQuestion, response }]);
     } catch (error: unknown) {
       console.error("Error asking question:", error);
-      const msg = getErrorMessage(error, "Error asking question.");
+      const msg = getApiErrorMessage(error, "Error asking question.");
       setErrorMessage(msg);
       alert(msg);
     } finally {
@@ -89,7 +82,7 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
           </button>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          All answers include 2-5 evidence quotes with timestamps
+          Answers are grounded in the transcript; evidence can be expanded below to cross-check.
         </p>
       </div>
 
@@ -100,26 +93,51 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
             Ask a question to get started
           </p>
         ) : (
-          qaHistory.map((item, index) => (
-            <div key={index} className="border-b pb-4 last:border-b-0">
-              <div className="mb-3">
-                <p className="font-semibold text-gray-900 mb-2">
-                  Q: {item.question}
-                </p>
-                <p className="text-gray-800">{item.response.answer}</p>
-              </div>
-
-              {item.response.has_sufficient_evidence ? (
-                <EvidenceList evidence={item.response.evidence} />
-              ) : (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ Insufficient evidence in transcript
+          qaHistory.map((item, index) => {
+            const isExpanded = expandedEvidence.has(index);
+            const hasEvidence = item.response.has_sufficient_evidence && item.response.evidence.length > 0;
+            return (
+              <div key={index} className="border-b pb-4 last:border-b-0">
+                <div className="mb-2">
+                  <p className="font-semibold text-gray-900 mb-2">
+                    Q: {item.question}
                   </p>
+                  <p className="text-gray-800">{item.response.answer}</p>
                 </div>
-              )}
-            </div>
-          ))
+
+                {!item.response.has_sufficient_evidence && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
+                    <p className="text-sm text-yellow-800">
+                      ⚠️ Insufficient evidence in transcript
+                    </p>
+                  </div>
+                )}
+
+                {hasEvidence && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedEvidence((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(index)) next.delete(index);
+                        else next.add(index);
+                        return next;
+                      })}
+                      className="flex items-center gap-1 text-sm text-green-700 hover:text-green-900 font-medium"
+                    >
+                      {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      {isExpanded ? "Hide" : "Show"} transcript evidence ({item.response.evidence.length} quotes)
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-2">
+                        <EvidenceList evidence={item.response.evidence} />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>

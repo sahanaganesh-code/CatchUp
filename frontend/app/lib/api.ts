@@ -1,5 +1,21 @@
 import axios from "axios";
 
+/** Turn API errors (including network/fetch failures) into a user-friendly string. */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  const err = error as {
+    message?: string;
+    code?: string;
+    response?: { status?: number; data?: { detail?: string; error?: string } };
+  };
+  if (!err?.response && (err?.code === "ERR_NETWORK" || /fetch|network|failed/i.test(String(err?.message))))
+    return "Couldn't reach the backend. Make sure the backend is running (e.g. port 8000).";
+  const data = err?.response?.data;
+  if (data?.detail && typeof data.detail === "string") return data.detail;
+  if (data?.error && typeof data.error === "string") return data.error;
+  if (err?.response?.status === 503) return "Backend unreachable. Is the backend server running?";
+  return fallback;
+}
+
 // In browser: same-origin proxy /api/backend -> no CORS. On server: call backend directly.
 const isBrowser = typeof window !== "undefined";
 const API_BASE = isBrowser ? "" : (process.env.BACKEND_URL || "http://127.0.0.1:8000");
@@ -80,6 +96,19 @@ export interface ChatbotResponse {
   has_sufficient_evidence: boolean;
 }
 
+/** Check if the backend is reachable (for "Backend: connected" banner). */
+export async function checkBackendHealth(): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const base = typeof window !== "undefined" ? "" : process.env.BACKEND_URL || "http://127.0.0.1:8000";
+    const url = typeof window !== "undefined" ? "/api/backend/health" : `${base}/`;
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok && (data.ok === true || data.status === "healthy"), message: data.message };
+  } catch {
+    return { ok: false, message: "Backend not reachable" };
+  }
+}
+
 export const api = {
   async ingestTranscript(
     sessionId: string,
@@ -135,7 +164,7 @@ export const api = {
     const response = await axios.post(url, formData, {
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
-      timeout: 600000, // 10 min for long lectures (60–120 min audio)
+      timeout: 1800000, // 30 min: upload + ffmpeg + transcription for long lectures
     });
     return response.data;
   },
@@ -146,6 +175,11 @@ export const api = {
     total_duration: string;
   }> {
     const response = await axios.get(`${API_BASE}${API_PREFIX}/transcript/${sessionId}`);
+    return response.data;
+  },
+
+  async listSessions(): Promise<{ session_ids: string[] }> {
+    const response = await axios.get(`${API_BASE}${API_PREFIX}/sessions`);
     return response.data;
   },
 
