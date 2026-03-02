@@ -15,15 +15,11 @@ CatchUp addresses critical accessibility needs:
 
 ## Features
 
-### 🎥 Two Accessible Modes
+### 🎯 How It Works
 
-1. **Zoom Meeting Mode**: RTMS (Real-Time Meeting Streaming) transcript ingestion
-   - Perfect for remote work, online classes, telehealth appointments
-   - Provides real-time captions and searchable transcripts
-
-2. **In-Person Lecture Mode**: Browser-based microphone recording with backend transcription
-   - Ideal for in-person classes, therapy sessions, support groups
-   - Enables participation without the stress of note-taking
+- **Single flow**: Click **Get Started** on the home page to enter session mode.
+- **In-person / lecture mode**: Record meetings or lectures with your device microphone, or upload audio/video files for transcription.
+- **Your sessions**: All sessions appear on the home page. Open any session to view transcript, recap, and Q&A.
 
 ### 🎯 Accessibility-First Features
 
@@ -35,6 +31,8 @@ CatchUp addresses critical accessibility needs:
   - Supports people with memory challenges or learning disabilities
   - Provides verifiable, timestamped information for review
   - Reduces anxiety about missing important details
+
+- **Calendar events**: Click **Extract Events** to find dates and times mentioned in the meeting. After extraction, open **Google Calendar** with one click to add events.
 
 - **FlowPilot Actions**: Propose and approve actions with evidence:
   - 📝 Notion tasks - Never forget follow-ups or assignments
@@ -78,8 +76,7 @@ catchup/
 │   │   ├── store.py         # ChromaDB vector store
 │   │   ├── rag.py           # RAG & Q&A logic
 │   │   ├── actions.py       # Action proposal & execution
-│   │   ├── zoom.py          # Zoom RTMS ingestion stub
-│   │   └── stt.py           # Speech-to-text stub
+│   │   └── stt.py           # Speech-to-text (e.g. Google Cloud STT)
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── .env                 # Create this (see setup)
@@ -176,23 +173,15 @@ The frontend will be available at `http://localhost:3000`
 
 ## Usage Guide
 
-### 1. Choose Your Mode
+### 1. Get Started
 
-On the home page, select either:
-- **Zoom Meeting Mode** for virtual meetings
-- **In-Person Lecture Mode** for live recordings
+On the home page, click **Get Started** to open the session view.
 
 ### 2. Start a Session
 
-**Zoom Mode:**
-- Enter a Zoom Meeting ID
-- Click "Connect to Meeting"
-- The system will simulate transcript ingestion (stub)
-
-**In-Person Mode:**
-- Enter a Lecture ID
-- Click "Start Session"
-- Use recording controls or upload audio (stub)
+- Enter a **Lecture ID** (or session name) and click **Start Session**.
+- **Record** using your microphone, or **upload** an audio/video file for transcription.
+- Transcript appears in the Full Transcript panel; you can also paste text manually.
 
 ### 3. Generate Recap
 
@@ -205,7 +194,12 @@ On the home page, select either:
 - Receive answers with 2-5 evidence quotes
 - Each quote includes timestamp and exact text from transcript
 
-### 5. Propose & Approve Actions
+### 5. Extract Calendar Events
+
+- In the **Calendar Events** panel, click **Extract Events** to find dates and times mentioned in the transcript.
+- After events are shown, use **Open Google Calendar** to add them to your calendar.
+
+### 6. Propose & Approve Actions
 
 - Click "Propose Actions" to generate action items
 - Review each action with its supporting evidence
@@ -273,17 +267,11 @@ Body: {
 }
 ```
 
-## Stub Implementations
+## Implementation Notes
 
-The following features are **stubs** for the hackathon MVP:
-
-1. **Zoom RTMS Integration** (`app/zoom.py`): In production, integrate with Zoom's Real-Time Meeting Streaming API
-2. **Speech-to-Text** (`app/stt.py`): In production, use OpenAI Whisper API or similar
-3. **Action Execution** (`app/actions.py`): In production, integrate with:
-   - Notion API for task creation
-   - Google Calendar API for events
-   - Email service for follow-ups
-   - Google Slides API for presentations
+- **Speech-to-Text** (`app/stt.py`): Uses Google Cloud Speech-to-Text (or similar) for recording and upload transcription.
+- **Action Execution** (`app/actions.py`): In production, integrate with Notion API, Google Calendar API, email services, and Google Slides API as needed.
+- **Calendar**: Extract Events pulls dates/times from the transcript; **Open Google Calendar** links to Google Calendar for manual or future API-based add.
 
 ## Development
 
@@ -330,8 +318,7 @@ The project enforces hard rules via `.cursorrules`:
 
 ## Future Enhancements
 
-- Real Zoom RTMS integration
-- Live audio transcription with Whisper
+- Live audio transcription improvements
 - Speaker diarization
 - Real-time streaming UI updates
 - Persistent database (PostgreSQL)
@@ -339,6 +326,7 @@ The project enforces hard rules via `.cursorrules`:
 - Session history
 - Export functionality
 - Mobile app
+- Deeper Google Calendar integration (add events via API)
 
 ## Accessibility Statement
 
