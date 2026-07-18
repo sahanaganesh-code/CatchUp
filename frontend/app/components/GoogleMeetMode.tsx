@@ -11,22 +11,22 @@ import TodoPanel from "./TodoPanel";
 import CalendarPanel from "./CalendarPanel";
 import NotesPanel from "./NotesPanel";
 
-interface ZoomModeProps {
+interface GoogleMeetModeProps {
   onBack: () => void;
 }
 
-export default function ZoomMode({ onBack }: ZoomModeProps) {
+export default function GoogleMeetMode({ onBack }: GoogleMeetModeProps) {
   const [sessionId, setSessionId] = useState("");
-  const [meetingId, setMeetingId] = useState("");
+  const [meetingCode, setMeetingCode] = useState("");
   const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [transcriptInput, setTranscriptInput] = useState("");
 
   const handleConnect = async () => {
-    if (!meetingId.trim()) return;
+    if (!meetingCode.trim()) return;
 
-    const newSessionId = `zoom_${meetingId}`;
-    setSessionId(newSessionId);
-    setIsConnected(true);
+    const newSessionId = `google_meet_${meetingCode}`;
+    setIsConnecting(true);
 
     // Simulate initial transcript chunks
     const mockChunks: TranscriptChunk[] = [
@@ -57,7 +57,16 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
       },
     ];
 
-    await api.ingestTranscript(newSessionId, "zoom", mockChunks);
+    try {
+      await api.ingestTranscript(newSessionId, "google-meet", mockChunks);
+      setSessionId(newSessionId);
+      setIsConnected(true);
+    } catch (error) {
+      console.error("Error connecting to meeting:", error);
+      alert("Error connecting to meeting");
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const handleAddTranscript = async () => {
@@ -70,7 +79,7 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
       speaker: "User",
     };
 
-    await api.ingestTranscript(sessionId, "zoom", [chunk]);
+    await api.ingestTranscript(sessionId, "google-meet", [chunk]);
     setTranscriptInput("");
   };
 
@@ -92,9 +101,9 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                Zoom Meeting Mode
+                Google Meet Mode
               </h1>
-              <p className="text-gray-600">RTMS transcript ingestion</p>
+              <p className="text-gray-600">Real-time transcript ingestion</p>
             </div>
           </div>
         </div>
@@ -103,26 +112,26 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
         {!isConnected ? (
           <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Connect to Zoom Meeting
+              Connect to Google Meet
             </h2>
             <p className="text-gray-600 mb-6">
-              Enter your Zoom meeting ID to start receiving real-time
+              Enter your Google Meet meeting code to start receiving real-time
               transcripts.
             </p>
             <div className="space-y-4">
               <input
                 type="text"
-                value={meetingId}
-                onChange={(e) => setMeetingId(e.target.value)}
-                placeholder="Enter Zoom Meeting ID"
+                value={meetingCode}
+                onChange={(e) => setMeetingCode(e.target.value)}
+                placeholder="Enter Google Meet code (e.g., abc-defg-hij)"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <button
                 onClick={handleConnect}
-                disabled={!meetingId.trim()}
+                disabled={!meetingCode.trim() || isConnecting}
                 className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                Connect to Meeting
+                {isConnecting ? "Connecting..." : "Connect to Meeting"}
               </button>
             </div>
           </div>
@@ -133,7 +142,7 @@ export default function ZoomMode({ onBack }: ZoomModeProps) {
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse" />
                 <span className="text-green-800 font-medium">
-                  Connected to Meeting {meetingId}
+                  Connected to Meeting {meetingCode}
                 </span>
               </div>
             </div>

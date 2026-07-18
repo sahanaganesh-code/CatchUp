@@ -19,14 +19,14 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
   const [sessionId, setSessionId] = useState("");
   const [lectureId, setLectureId] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [transcriptInput, setTranscriptInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
     if (!lectureId.trim()) return;
 
     const newSessionId = `inperson_${lectureId}`;
-    setSessionId(newSessionId);
 
     // Simulate initial transcript
     const mockChunks: TranscriptChunk[] = [
@@ -52,7 +52,16 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
       },
     ];
 
-    api.ingestTranscript(newSessionId, "in-person", mockChunks);
+    setIsStarting(true);
+    try {
+      await api.ingestTranscript(newSessionId, "in-person", mockChunks);
+      setSessionId(newSessionId);
+    } catch (error) {
+      console.error("Error starting session:", error);
+      alert("Error starting session");
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,10 +137,10 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
               />
               <button
                 onClick={handleStartSession}
-                disabled={!lectureId.trim()}
+                disabled={!lectureId.trim() || isStarting}
                 className="w-full bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                Start Session
+                {isStarting ? "Starting..." : "Start Session"}
               </button>
             </div>
           </div>

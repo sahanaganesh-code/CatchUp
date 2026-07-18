@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { Video, Mic } from "lucide-react";
-import ZoomMode from "./components/ZoomMode";
+import GoogleMeetMode from "./components/GoogleMeetMode";
 import InPersonMode from "./components/InPersonMode";
 import AIChatbot from "./components/AIChatbot";
 
 export default function Home() {
-  const [mode, setMode] = useState<"zoom" | "in-person" | null>(null);
+  const [mode, setMode] = useState<"google-meet" | "in-person" | null>(null);
 
-  if (mode === "zoom") {
-    return <ZoomMode onBack={() => setMode(null)} />;
+  if (mode === "google-meet") {
+    return <GoogleMeetMode onBack={() => setMode(null)} />;
   }
 
   if (mode === "in-person") {
@@ -33,19 +33,19 @@ export default function Home() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Zoom Mode */}
+          {/* Google Meet Mode */}
           <button
-            onClick={() => setMode("zoom")}
+            onClick={() => setMode("google-meet")}
             className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-blue-500 text-left"
           >
             <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-6">
               <Video className="w-8 h-8 text-blue-600" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Zoom Meeting Mode
+              Google Meet Mode
             </h2>
             <p className="text-gray-600 mb-4">
-              Real-time captions and transcripts for remote work, online classes, 
+              Real-time captions and transcripts for remote work, online classes,
               and telehealth appointments. Perfect for hearing accessibility.
             </p>
             <div className="flex items-center text-sm text-blue-600 font-medium">

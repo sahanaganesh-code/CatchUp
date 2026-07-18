@@ -30,6 +30,7 @@ frontend/.next/
 frontend/out/
 frontend/node_modules/
 frontend/.DS_Store
+frontend/tsconfig.tsbuildinfo
 .next/
 out/
 node_modules/

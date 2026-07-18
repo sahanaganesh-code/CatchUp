@@ -24,7 +24,7 @@ from app.models import (
 )
 from app.rag import answer_question, generate_recap
 from app.actions import propose_actions, approve_action, list_actions
-from app.zoom import process_zoom_webhook, simulate_zoom_transcript
+from app.google_meet import process_google_meet_webhook
 from app.stt import process_audio_upload, transcribe_audio
 from app.store import vector_store
 from app.config import settings
@@ -179,10 +179,10 @@ def google_meet_webhook(payload: GoogleMeetWebhookPayload):
     """
     try:
         logger.info(f"Received Google Meet webhook for meeting {payload.meeting_code}")
-        success = process_zoom_webhook(payload)  # Person 2 will update zoom.py to google_meet.py
+        success = process_google_meet_webhook(payload)
         return {"status": "success" if success else "error"}
     except Exception as e:
-        logger.error(f"Error processing Zoom webhook: {e}")
+        logger.error(f"Error processing Google Meet webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
