@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: catchup-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: GEMINI_EMBED_MODEL
+        value: models/gemini-embedding-001
+      - key: CHROMA_PERSIST_DIR
+        value: ./chroma_db
+      - key: CORS_ORIGINS
+        sync: false

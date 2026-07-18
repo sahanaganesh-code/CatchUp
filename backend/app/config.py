@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
-    
+
+    # Comma-separated list of allowed frontend origins for CORS
+    cors_origins: str = "http://localhost:3000"
+
     class Config:
         env_file = ".env"
         case_sensitive = False
