@@ -140,6 +140,27 @@ export const api = {
     return response.data;
   },
 
+  async uploadAudioChunk(
+    sessionId: string,
+    audioBlob: Blob,
+    startOffsetSeconds: number,
+    mimeType: string
+  ) {
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "chunk.webm");
+
+    const response = await axios.post(
+      `${API_URL}/api/audio/chunk?session_id=${encodeURIComponent(sessionId)}&start_offset_seconds=${startOffsetSeconds}&mime_type=${encodeURIComponent(mimeType)}`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+    return response.data;
+  },
+
   async getTranscript(sessionId: string): Promise<{
     session_id: string;
     chunks: TranscriptChunk[];

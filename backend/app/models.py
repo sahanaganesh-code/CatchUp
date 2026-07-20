@@ -94,11 +94,6 @@ class ApproveActionResponse(BaseModel):
     message: str
 
 
-class AudioUploadRequest(BaseModel):
-    """Metadata for audio upload (in-person mode)."""
-    session_id: str = Field(..., description="Session identifier")
-
-
 class GoogleMeetWebhookPayload(BaseModel):
     """Payload for Google Meet real-time transcription webhook."""
     meeting_code: str = Field(..., description="Google Meet meeting code")

@@ -106,13 +106,64 @@ def generate_text(
         )
         
         response = gen_model.generate_content(prompt)
-        
+
         text = response.text
         logger.info(f"Successfully generated {len(text)} characters")
         return text
-    
+
     except Exception as e:
         logger.error(f"Error generating text: {e}")
+        raise
+
+
+def generate_from_audio(
+    audio_bytes: bytes,
+    mime_type: str,
+    prompt: str,
+    model: str = None,
+    temperature: Optional[float] = None,
+    system_instruction: Optional[str] = None
+) -> str:
+    """
+    Generate text from an audio clip using Gemini's native audio input support.
+    Used for transcribing live-captured audio chunks (screen-share/tab audio).
+
+    Args:
+        audio_bytes: Raw audio bytes (e.g. a MediaRecorder-produced webm/opus clip)
+        mime_type: The audio mime type, passed through as-is to Gemini
+        prompt: Instruction for what to do with the audio (e.g. transcribe it)
+        model: Model name (defaults to settings.gemini_model)
+        temperature: Override default temperature (0.3)
+        system_instruction: Optional system instruction for better context
+
+    Returns:
+        Generated text string
+    """
+    if model is None:
+        model = settings.gemini_model
+
+    try:
+        logger.info(f"Generating from audio ({len(audio_bytes)} bytes, mime={mime_type}) with model={model}")
+
+        gen_config = GENERATION_CONFIG.copy()
+        if temperature is not None:
+            gen_config["temperature"] = temperature
+
+        gen_model = genai.GenerativeModel(
+            model,
+            generation_config=gen_config,
+            safety_settings=SAFETY_SETTINGS,
+            system_instruction=system_instruction
+        )
+
+        response = gen_model.generate_content([prompt, {"mime_type": mime_type, "data": audio_bytes}])
+
+        text = response.text
+        logger.info(f"Successfully transcribed audio: {len(text)} characters")
+        return text
+
+    except Exception as e:
+        logger.error(f"Error generating from audio: {e}")
         raise
 
 

@@ -11,7 +11,6 @@ from app.models import (
     ApproveActionRequest,
     ApproveActionResponse,
     GoogleMeetWebhookPayload,
-    AudioUploadRequest,
     CreateNoteRequest,
     UpdateNoteRequest,
     Note,
@@ -25,7 +24,7 @@ from app.models import (
 from app.rag import answer_question, generate_recap
 from app.actions import propose_actions, approve_action, list_actions
 from app.google_meet import process_google_meet_webhook
-from app.stt import process_audio_upload, transcribe_audio
+from app.stt import process_audio_upload
 from app.store import vector_store
 from app.config import settings
 from app.content_manager import (
@@ -190,26 +189,52 @@ def google_meet_webhook(payload: GoogleMeetWebhookPayload):
 @app.post("/api/audio/upload")
 async def upload_audio(session_id: str, audio: UploadFile = File(...)):
     """
-    Upload audio file for transcription (in-person mode stub).
-    In production, this would transcribe using Whisper API.
+    Upload a full audio file for transcription (in-person mode).
     """
     try:
         logger.info(f"Received audio upload for session {session_id}: {audio.filename}")
-        
-        # Read audio data
+
         audio_data = await audio.read()
-        
-        # Process audio (stub)
-        success = process_audio_upload(session_id, audio_data)
-        
+        success = process_audio_upload(session_id, audio_data, mime_type="audio/webm", start_offset_seconds=0)
+
         return {
-            "status": "success" if success else "error",
+            "status": "success" if success else "no_speech_or_error",
             "session_id": session_id,
             "filename": audio.filename,
             "size_bytes": len(audio_data)
         }
     except Exception as e:
         logger.error(f"Error uploading audio: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/audio/chunk")
+async def upload_audio_chunk(
+    session_id: str,
+    start_offset_seconds: float,
+    mime_type: str = "audio/webm",
+    audio: UploadFile = File(...)
+):
+    """
+    Upload one live audio chunk (screen-share/tab-audio capture mode) for
+    real transcription. Chunks arrive periodically from the frontend's
+    MediaRecorder and are stitched into one continuous session transcript
+    using start_offset_seconds.
+    """
+    try:
+        logger.info(f"Received audio chunk for session {session_id} @ {start_offset_seconds}s")
+
+        audio_data = await audio.read()
+        success = process_audio_upload(session_id, audio_data, mime_type, start_offset_seconds)
+
+        return {
+            "status": "success" if success else "no_speech_or_error",
+            "session_id": session_id,
+            "start_offset_seconds": start_offset_seconds,
+            "size_bytes": len(audio_data)
+        }
+    except Exception as e:
+        logger.error(f"Error uploading audio chunk: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -6,9 +6,11 @@ import { api, TranscriptChunk } from "../lib/api";
 
 interface TranscriptViewerProps {
   sessionId: string;
+  /** If set, polls the transcript on this interval instead of requiring a manual "Load Transcript" click. */
+  autoRefreshMs?: number;
 }
 
-export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
+export default function TranscriptViewer({ sessionId, autoRefreshMs }: TranscriptViewerProps) {
   const [transcript, setTranscript] = useState<TranscriptChunk[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalDuration, setTotalDuration] = useState("00:00:00");
@@ -26,6 +28,27 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
       setLoading(false);
     }
   };
+
+  // Silent variant for background polling - a 404 ("Session not found") is
+  // expected before the first chunk has been transcribed yet, not an error
+  // worth interrupting the user with an alert over.
+  const pollTranscript = async () => {
+    try {
+      const response = await api.getTranscript(sessionId);
+      setTranscript(response.chunks);
+      setTotalDuration(response.total_duration);
+    } catch (error) {
+      console.error("Error polling transcript:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoRefreshMs) return;
+    pollTranscript();
+    const id = setInterval(pollTranscript, autoRefreshMs);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, autoRefreshMs]);
 
   const exportTranscript = () => {
     const text = transcript
@@ -58,20 +81,27 @@ export default function TranscriptViewer({ sessionId }: TranscriptViewerProps) {
               Export
             </button>
           )}
-          <button
-            onClick={loadTranscript}
-            disabled={loading}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-300 flex items-center"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              "Load Transcript"
-            )}
-          </button>
+          {autoRefreshMs ? (
+            <span className="flex items-center text-sm text-indigo-600 font-medium">
+              <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
+              Live
+            </span>
+          ) : (
+            <button
+              onClick={loadTranscript}
+              disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-300 flex items-center"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                "Load Transcript"
+              )}
+            </button>
+          )}
         </div>
       </div>
 
