@@ -12,7 +12,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-flash-latest
+        value: gemini-flash-lite-latest
       - key: GEMINI_EMBED_MODEL
         value: models/gemini-embedding-001
       - key: CHROMA_PERSIST_DIR

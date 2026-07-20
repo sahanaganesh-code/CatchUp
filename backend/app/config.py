@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     chroma_collection_name: str = "catchup_transcripts_gemini"
     
     # Models - Using Google's Gemini for everything
-    gemini_model: str = "gemini-flash-latest"  # Fast, efficient for meeting analysis
+    gemini_model: str = "gemini-flash-lite-latest"  # Fast, efficient for meeting analysis
     gemini_embed_model: str = "models/gemini-embedding-001"  # Optimized embeddings
     
     # RAG Settings
