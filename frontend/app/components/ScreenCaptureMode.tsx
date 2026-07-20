@@ -28,8 +28,18 @@ function pickSupportedMimeType(): string {
   return MIME_CANDIDATES.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
 }
 
+function slugify(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
   const [sessionId, setSessionId] = useState("");
+  const [sessionName, setSessionName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,8 +96,10 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     const audioOnlyStream = new MediaStream(audioTracks);
     displayStreamRef.current = displayStream;
 
-    const newSessionId = `screenshare_${Date.now()}`;
+    const slug = slugify(sessionName);
+    const newSessionId = slug ? `screenshare_${slug}_${Date.now()}` : `screenshare_${Date.now()}`;
     setSessionId(newSessionId);
+    setDisplayName(sessionName.trim() || "Untitled session");
     chunkIndexRef.current = 0;
 
     const recorder = new MediaRecorder(audioOnlyStream, { mimeType });
@@ -148,6 +160,13 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
               Share a Zoom call, webinar, or video and get live transcription and evidence-based
               Q&amp;A - no setup needed, just click and share.
             </p>
+            <input
+              type="text"
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              placeholder="Session name (optional, e.g. Wednesday Standup)"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                 <p className="text-sm text-red-800">{error}</p>
@@ -171,7 +190,9 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
               <div className="flex items-center">
                 <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse" />
-                <span className="text-green-800 font-medium">Capturing screen audio...</span>
+                <span className="text-green-800 font-medium">
+                  Capturing: {displayName}
+                </span>
               </div>
               <button
                 onClick={handleStopCapture}

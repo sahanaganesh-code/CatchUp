@@ -187,14 +187,19 @@ def google_meet_webhook(payload: GoogleMeetWebhookPayload):
 
 
 @app.post("/api/audio/upload")
-async def upload_audio(session_id: str, audio: UploadFile = File(...)):
+def upload_audio(session_id: str, audio: UploadFile = File(...)):
     """
     Upload a full audio file for transcription (in-person mode).
+
+    Plain `def`, not `async def`: transcription is a slow, blocking Gemini
+    call (10-20+ seconds). FastAPI runs plain-`def` endpoints in a thread
+    pool automatically, so one slow upload doesn't freeze the whole server
+    the way it would inside an `async def` handler.
     """
     try:
         logger.info(f"Received audio upload for session {session_id}: {audio.filename}")
 
-        audio_data = await audio.read()
+        audio_data = audio.file.read()
         success = process_audio_upload(session_id, audio_data, mime_type="audio/webm", start_offset_seconds=0)
 
         return {
@@ -209,7 +214,7 @@ async def upload_audio(session_id: str, audio: UploadFile = File(...)):
 
 
 @app.post("/api/audio/chunk")
-async def upload_audio_chunk(
+def upload_audio_chunk(
     session_id: str,
     start_offset_seconds: float,
     mime_type: str = "audio/webm",
@@ -220,11 +225,15 @@ async def upload_audio_chunk(
     real transcription. Chunks arrive periodically from the frontend's
     MediaRecorder and are stitched into one continuous session transcript
     using start_offset_seconds.
+
+    Plain `def`, not `async def` - see upload_audio() above for why: this
+    avoids one slow transcription call blocking every other request
+    (including other chunks, transcript polling, Q&A) on the event loop.
     """
     try:
         logger.info(f"Received audio chunk for session {session_id} @ {start_offset_seconds}s")
 
-        audio_data = await audio.read()
+        audio_data = audio.file.read()
         success = process_audio_upload(session_id, audio_data, mime_type, start_offset_seconds)
 
         return {

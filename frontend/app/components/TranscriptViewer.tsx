@@ -114,7 +114,9 @@ export default function TranscriptViewer({ sessionId, autoRefreshMs }: Transcrip
       <div className="max-h-96 overflow-y-auto space-y-3">
         {transcript.length === 0 ? (
           <p className="text-gray-500 text-center py-8">
-            Click "Load Transcript" to view the full meeting transcript
+            {autoRefreshMs
+              ? "Waiting for the first transcript chunk..."
+              : 'Click "Load Transcript" to view the full meeting transcript'}
           </p>
         ) : (
           transcript.map((chunk, index) => (
