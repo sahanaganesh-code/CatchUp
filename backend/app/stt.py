@@ -29,6 +29,21 @@ def _format_timestamp(total_seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+# WebM/Matroska files must start with this exact 4-byte EBML magic number.
+EBML_MAGIC = b"\x1a\x45\xdf\xa3"
+
+
+def _diagnose_audio_bytes(audio_bytes: bytes) -> str:
+    """Cheap structural diagnostics for debugging chunk upload issues - not
+    a full parse, just enough to tell malformed/empty audio apart from a
+    genuinely valid file Gemini just couldn't find speech in."""
+    size = len(audio_bytes)
+    starts_with_ebml = audio_bytes[:4] == EBML_MAGIC
+    head_hex = audio_bytes[:16].hex()
+    tail_hex = audio_bytes[-16:].hex() if size >= 16 else audio_bytes.hex()
+    return f"size={size}B starts_with_ebml_magic={starts_with_ebml} head={head_hex} tail={tail_hex}"
+
+
 def transcribe_audio(
     session_id: str,
     audio_bytes: bytes,
@@ -40,6 +55,10 @@ def transcribe_audio(
     timestamped at start_offset_seconds. Returns [] if no speech is detected.
     """
     try:
+        logger.info(
+            f"Transcribing chunk for session {session_id} @ {start_offset_seconds}s: "
+            f"{_diagnose_audio_bytes(audio_bytes)}"
+        )
         text = generate_from_audio(
             audio_bytes=audio_bytes,
             mime_type=mime_type,
@@ -50,6 +69,13 @@ def transcribe_audio(
         if not text or text == NO_SPEECH_SENTINEL:
             logger.info(f"No speech detected in chunk for session {session_id} @ {start_offset_seconds}s")
             return []
+
+        if "provide the audio" in text.lower() or "provide an audio" in text.lower():
+            logger.warning(
+                f"Gemini reported no usable audio attached for session {session_id} "
+                f"@ {start_offset_seconds}s despite a non-empty request. "
+                f"{_diagnose_audio_bytes(audio_bytes)}"
+            )
 
         chunk = TranscriptChunk(
             timestamp=_format_timestamp(start_offset_seconds),
