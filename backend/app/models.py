@@ -37,6 +37,15 @@ class QuestionResponse(BaseModel):
     has_sufficient_evidence: bool = Field(..., description="Whether sufficient evidence was found")
 
 
+class QAHistoryItem(BaseModel):
+    """A past question + answer for a session, for the history view."""
+    question: str
+    answer: str
+    evidence: List[Evidence]
+    has_sufficient_evidence: bool
+    created_at: datetime
+
+
 class RecapRequest(BaseModel):
     """Request to generate a recap."""
     session_id: str = Field(..., description="Session identifier")

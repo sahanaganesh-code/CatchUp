@@ -20,6 +20,14 @@ export interface QuestionResponse {
   has_sufficient_evidence: boolean;
 }
 
+export interface QAHistoryItem {
+  question: string;
+  answer: string;
+  evidence: Evidence[];
+  has_sufficient_evidence: boolean;
+  created_at: string;
+}
+
 export interface RecapResponse {
   summary: string;
   key_points: string[];
@@ -110,6 +118,13 @@ export const api = {
       question,
     });
     return response.data;
+  },
+
+  async getQAHistory(sessionId: string): Promise<QAHistoryItem[]> {
+    const response = await axios.get(`${API_URL}/api/qa-history`, {
+      params: { session_id: sessionId },
+    });
+    return response.data.history;
   },
 
   async getRecap(sessionId: string): Promise<RecapResponse> {

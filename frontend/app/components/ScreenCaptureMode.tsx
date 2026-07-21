@@ -124,13 +124,26 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     const slug = slugify(sessionName);
     const newSessionId = slug ? `screenshare_${slug}_${Date.now()}` : `screenshare_${Date.now()}`;
     const newDisplayName = sessionName.trim() || "Untitled session";
+
+    // Session registration must complete before anything else can reference
+    // this session_id - notes/todos/events/actions/transcript_chunks all have
+    // a foreign key to sessions.id, so writing to any of them before this
+    // commits fails outright (confirmed live: a note created too quickly
+    // after starting a session was silently lost to exactly this race).
+    try {
+      await api.createSession(newSessionId, newDisplayName, "screen-share");
+    } catch (err) {
+      console.error("Error creating session:", err);
+      displayStream.getTracks().forEach((t) => t.stop());
+      setError("Error starting session. Please try again.");
+      return;
+    }
+
     setSessionId(newSessionId);
     setDisplayName(newDisplayName);
     chunkIndexRef.current = 0;
     headerBlobRef.current = null;
     pendingFragmentsRef.current = [];
-
-    api.createSession(newSessionId, newDisplayName, "screen-share").catch(console.error);
 
     // A single continuous recorder for the whole session, using MediaRecorder's
     // own native timeslice firing (see the NATIVE_FRAGMENT_MS comment above)

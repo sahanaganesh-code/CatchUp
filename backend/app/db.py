@@ -93,6 +93,17 @@ class ActionRow(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class QAHistoryRow(Base):
+    __tablename__ = "qa_history"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    evidence = Column(JSONB, nullable=False, default=list)
+    has_sufficient_evidence = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 def init_db():
     """Enable pgvector and create all tables. Idempotent - safe to call on every startup."""
     with engine.connect() as conn:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MessageCircle, Send, Loader2 } from "lucide-react";
 import { api, QuestionResponse } from "../lib/api";
 import EvidenceList from "./EvidenceList";
@@ -19,6 +19,24 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
   const [question, setQuestion] = useState("");
   const [qaHistory, setQaHistory] = useState<QAItem[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api
+      .getQAHistory(sessionId)
+      .then((history) => {
+        setQaHistory(
+          history.map((h) => ({
+            question: h.question,
+            response: {
+              answer: h.answer,
+              evidence: h.evidence,
+              has_sufficient_evidence: h.has_sufficient_evidence,
+            },
+          }))
+        );
+      })
+      .catch((error) => console.error("Error loading Q&A history:", error));
+  }, [sessionId]);
 
   const handleAskQuestion = async () => {
     if (!question.trim()) return;

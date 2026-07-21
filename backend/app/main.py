@@ -33,7 +33,8 @@ from app.content_manager import (
 )
 from app.chatbot import chat_with_content
 from app.sessions import register_session, list_sessions
-from app.db import init_db, SessionLocal, NoteRow, TodoRow, CalendarEventRow, ActionRow, SessionRecord
+from app.qa_history import save_qa, list_qa_history
+from app.db import init_db, SessionLocal, NoteRow, TodoRow, CalendarEventRow, ActionRow, SessionRecord, QAHistoryRow
 import logging
 
 # Configure logging
@@ -110,10 +111,26 @@ def ask_question(request: QuestionRequest):
             logger.warning("Response has insufficient evidence, overriding to insufficient")
             response.has_sufficient_evidence = False
             response.answer = "Insufficient evidence in the transcript to answer this question."
-        
+
+        try:
+            save_qa(request.session_id, request.question, response)
+        except Exception as e:
+            logger.error(f"Error saving Q&A history (answer still returned): {e}")
+
         return response
     except Exception as e:
         logger.error(f"Error answering question: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/qa-history")
+def get_qa_history(session_id: str):
+    """Get past Q&A for a session, oldest first."""
+    try:
+        history = list_qa_history(session_id)
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"Error getting Q&A history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -265,7 +282,7 @@ def upload_audio_chunk(
 
 @app.delete("/api/session/{session_id}")
 def delete_session(session_id: str):
-    """Delete a session and all its data (transcript chunks, notes, todos, events, actions)."""
+    """Delete a session and all its data (transcript chunks, notes, todos, events, actions, Q&A history)."""
     try:
         logger.info(f"Deleting session {session_id}")
         vector_store.delete_session(session_id)
@@ -274,6 +291,7 @@ def delete_session(session_id: str):
             db.query(TodoRow).filter(TodoRow.session_id == session_id).delete()
             db.query(CalendarEventRow).filter(CalendarEventRow.session_id == session_id).delete()
             db.query(ActionRow).filter(ActionRow.session_id == session_id).delete()
+            db.query(QAHistoryRow).filter(QAHistoryRow.session_id == session_id).delete()
             db.query(SessionRecord).filter(SessionRecord.id == session_id).delete()
             db.commit()
         return {"status": "success", "session_id": session_id}
