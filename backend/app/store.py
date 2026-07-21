@@ -34,7 +34,7 @@ class VectorStore:
                     id=self._generate_chunk_id(session_id, chunk.timestamp, chunk.text),
                     session_id=session_id,
                     timestamp=chunk.timestamp,
-                    speaker=chunk.speaker or "Unknown",
+                    speaker=chunk.speaker or "Speaker",
                     text=chunk.text,
                     embedding=embedding,
                 )
@@ -69,7 +69,7 @@ class VectorStore:
             {
                 "text": row.TranscriptChunkRow.text,
                 "timestamp": row.TranscriptChunkRow.timestamp,
-                "speaker": row.TranscriptChunkRow.speaker or "Unknown",
+                "speaker": row.TranscriptChunkRow.speaker or "Speaker",
                 "distance": row.distance,
             }
             for row in rows
@@ -88,7 +88,7 @@ class VectorStore:
             ).scalars().all()
 
         return [
-            {"text": r.text, "timestamp": r.timestamp, "speaker": r.speaker or "Unknown"}
+            {"text": r.text, "timestamp": r.timestamp, "speaker": r.speaker or "Speaker"}
             for r in rows
         ]
 

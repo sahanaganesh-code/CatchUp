@@ -3,22 +3,47 @@ Speech-to-Text (STT) for live audio capture (screen-share/tab-audio mode and
 in-person audio uploads). Uses Gemini's native audio input support - see
 gemini_client.generate_from_audio().
 """
-from typing import List
+from typing import List, Optional, Tuple
 from app.models import TranscriptChunk
 from app.store import vector_store
 from app.gemini_client import generate_from_audio
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 NO_SPEECH_SENTINEL = "[NO_SPEECH]"
 
 TRANSCRIPTION_PROMPT = (
-    "Transcribe the speech in this audio clip verbatim. "
+    "Transcribe the speech in this audio clip verbatim, and identify who is speaking.\n\n"
     f"If there is no discernible speech (silence, music only, background noise), "
-    f"respond with exactly: {NO_SPEECH_SENTINEL}. "
-    "Do not add commentary, timestamps, or speaker labels - return only the spoken words."
+    f"respond with exactly: {NO_SPEECH_SENTINEL}.\n\n"
+    "Otherwise, respond with one or more turns, in chronological order, each in "
+    "exactly this two-line format and nothing else (start a new turn every time "
+    "the speaker changes):\n"
+    "SPEAKER: <label>\n"
+    "TEXT: <verbatim transcription of that turn>\n\n"
+    "For <label>: use the speaker's real name ONLY if it is explicitly said in this "
+    "clip - either they introduce themselves (\"Hi, I'm Alex\") or someone else "
+    "addresses them by name. Never guess or infer a name from context alone. If no "
+    "real name is said, and you can distinguish more than one voice in this clip, "
+    "use \"Speaker 1\", \"Speaker 2\", etc., consistently for the same voice within "
+    "this clip, in order of first appearance. If there is only one voice and no "
+    "name was said, use \"Speaker 1\"."
 )
+
+
+def _parse_transcription(raw: str) -> List[Tuple[Optional[str], str]]:
+    """
+    Parse one or more SPEAKER:/TEXT: turns from the structured response. Falls
+    back to a single unlabeled turn with the whole response as text if the
+    model didn't follow the format - the transcript must never be dropped
+    just because speaker labeling failed.
+    """
+    turns = re.findall(r"SPEAKER:\s*(.+?)\s*\nTEXT:\s*(.+?)(?=\nSPEAKER:|\Z)", raw, re.DOTALL)
+    if turns:
+        return [(speaker.strip(), text.strip()) for speaker, text in turns if text.strip()]
+    return [(None, raw.strip())]
 
 
 def _format_timestamp(total_seconds: float) -> str:
@@ -51,7 +76,8 @@ def transcribe_audio(
     start_offset_seconds: float
 ) -> List[TranscriptChunk]:
     """
-    Transcribe a single audio chunk and return it as one TranscriptChunk
+    Transcribe a single audio chunk into one or more speaker-labeled
+    TranscriptChunks (one per speaker turn detected within the clip), all
     timestamped at start_offset_seconds. Returns [] if no speech is detected.
     """
     try:
@@ -59,30 +85,34 @@ def transcribe_audio(
             f"Transcribing chunk for session {session_id} @ {start_offset_seconds}s: "
             f"{_diagnose_audio_bytes(audio_bytes)}"
         )
-        text = generate_from_audio(
+        raw = generate_from_audio(
             audio_bytes=audio_bytes,
             mime_type=mime_type,
             prompt=TRANSCRIPTION_PROMPT,
             temperature=0.0,
         ).strip()
 
-        if not text or text == NO_SPEECH_SENTINEL:
+        if not raw or raw == NO_SPEECH_SENTINEL:
             logger.info(f"No speech detected in chunk for session {session_id} @ {start_offset_seconds}s")
             return []
 
-        if "provide the audio" in text.lower() or "provide an audio" in text.lower():
+        if "provide the audio" in raw.lower() or "provide an audio" in raw.lower():
             logger.warning(
                 f"Gemini reported no usable audio attached for session {session_id} "
                 f"@ {start_offset_seconds}s despite a non-empty request. "
                 f"{_diagnose_audio_bytes(audio_bytes)}"
             )
 
-        chunk = TranscriptChunk(
-            timestamp=_format_timestamp(start_offset_seconds),
-            text=text,
-            speaker=None,
-        )
-        return [chunk]
+        turns = _parse_transcription(raw)
+        timestamp = _format_timestamp(start_offset_seconds)
+        # All turns from one chunk share a timestamp - Gemini doesn't give us
+        # sub-chunk timing, only which turn came first within the clip (already
+        # reflected in the order returned).
+        return [
+            TranscriptChunk(timestamp=timestamp, text=text, speaker=speaker)
+            for speaker, text in turns
+            if text
+        ]
 
     except Exception as e:
         logger.error(f"Error transcribing audio chunk for session {session_id}: {e}")
