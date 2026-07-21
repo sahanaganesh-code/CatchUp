@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, History, Mic, ScreenShare } from "lucide-react";
+import { ArrowLeft, History, Mic, ScreenShare, Trash2 } from "lucide-react";
 import { api, Session } from "../lib/api";
 import RecapPanel from "./RecapPanel";
 import QAPanel from "./QAPanel";
@@ -26,6 +26,7 @@ export default function SessionHistory({ onBack }: SessionHistoryProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -34,6 +35,23 @@ export default function SessionHistory({ onBack }: SessionHistoryProps) {
       .catch((error) => console.error("Error loading sessions:", error))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    if (!confirm("Delete this session? This will permanently remove its transcript, notes, Q&A, to-dos, events, and actions.")) {
+      return;
+    }
+    setDeletingId(sessionId);
+    try {
+      await api.deleteSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (error) {
+      console.error("Error deleting session:", error);
+      alert("Error deleting session. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId);
 
@@ -119,10 +137,15 @@ export default function SessionHistory({ onBack }: SessionHistoryProps) {
         ) : (
           <div className="space-y-3">
             {sessions.map((session) => (
-              <button
+              <div
                 key={session.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedSessionId(session.id)}
-                className="w-full bg-white rounded-xl shadow-lg p-5 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-indigo-500 text-left flex items-center"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") setSelectedSessionId(session.id);
+                }}
+                className="w-full bg-white rounded-xl shadow-lg p-5 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-indigo-500 text-left flex items-center cursor-pointer"
               >
                 <div className="flex items-center justify-center w-10 h-10 bg-indigo-100 rounded-full mr-4 flex-shrink-0">
                   {session.mode === "screen-share" ? (
@@ -138,7 +161,15 @@ export default function SessionHistory({ onBack }: SessionHistoryProps) {
                     {formatDate(session.created_at)}
                   </p>
                 </div>
-              </button>
+                <button
+                  onClick={(e) => handleDeleteSession(e, session.id)}
+                  disabled={deletingId === session.id}
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50"
+                  title="Delete session"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
             ))}
           </div>
         )}

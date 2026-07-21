@@ -316,4 +316,9 @@ export const api = {
     const response = await axios.get(`${API_URL}/api/sessions`);
     return response.data.sessions;
   },
+
+  async deleteSession(sessionId: string) {
+    const response = await axios.delete(`${API_URL}/api/session/${sessionId}`);
+    return response.data;
+  },
 };
