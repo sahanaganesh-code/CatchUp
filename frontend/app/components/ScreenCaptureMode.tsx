@@ -5,7 +5,6 @@ import { ArrowLeft, ScreenShare, EyeOff, Eye } from "lucide-react";
 import { api } from "../lib/api";
 import RecapPanel from "./RecapPanel";
 import QAPanel from "./QAPanel";
-import ActionsPanel from "./ActionsPanel";
 import TranscriptViewer from "./TranscriptViewer";
 import TodoPanel from "./TodoPanel";
 import CalendarPanel from "./CalendarPanel";
@@ -338,7 +337,6 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
                 </div>
                 <div className="space-y-6">
                   <NotesPanel sessionId={sessionId} />
-                  <ActionsPanel sessionId={sessionId} />
                 </div>
               </div>
             </div>

@@ -5,7 +5,6 @@ import { ArrowLeft, Mic, Upload, Send } from "lucide-react";
 import { api, TranscriptChunk } from "../lib/api";
 import RecapPanel from "./RecapPanel";
 import QAPanel from "./QAPanel";
-import ActionsPanel from "./ActionsPanel";
 import TranscriptViewer from "./TranscriptViewer";
 import TodoPanel from "./TodoPanel";
 import CalendarPanel from "./CalendarPanel";
@@ -236,7 +235,7 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
                 <QAPanel sessionId={sessionId} />
               </div>
 
-              {/* Bottom Row: Todos, Calendar, Notes, Actions */}
+              {/* Bottom Row: Todos, Calendar, Notes */}
               <div className="grid lg:grid-cols-2 gap-6">
                 <div className="space-y-6">
                   <TodoPanel sessionId={sessionId} />
@@ -244,7 +243,6 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
                 </div>
                 <div className="space-y-6">
                   <NotesPanel sessionId={sessionId} />
-                  <ActionsPanel sessionId={sessionId} />
                 </div>
               </div>
             </div>

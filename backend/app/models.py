@@ -58,49 +58,9 @@ class RecapResponse(BaseModel):
     evidence: List[Evidence] = Field(..., description="Supporting evidence")
 
 
-class ActionType(str):
-    NOTION_TASK = "notion_task"
-    CALENDAR_EVENT = "calendar_event"
-    EMAIL_FOLLOWUP = "email_followup"
-    SLIDES = "slides"
-
-
-class ProposedAction(BaseModel):
-    """A proposed action from the meeting."""
-    action_id: str = Field(..., description="Unique action identifier")
-    session_id: str = Field(..., description="Associated session")
-    action_type: Literal["notion_task", "calendar_event", "email_followup", "slides"]
-    title: str = Field(..., description="Action title")
-    description: str = Field(..., description="Action description")
-    evidence: List[Evidence] = Field(..., description="Supporting evidence")
-    metadata: dict = Field(default_factory=dict, description="Type-specific metadata")
-    approved: bool = Field(default=False, description="Whether action is approved")
-    executed: bool = Field(default=False, description="Whether action was executed")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class ProposeActionsRequest(BaseModel):
-    """Request to propose actions from transcript."""
+class SessionIdRequest(BaseModel):
+    """Request keyed by session_id only (used by todo/event generation)."""
     session_id: str = Field(..., description="Session identifier")
-
-
-class ProposeActionsResponse(BaseModel):
-    """Response with proposed actions."""
-    actions: List[ProposedAction] = Field(..., description="List of proposed actions")
-
-
-class ApproveActionRequest(BaseModel):
-    """Request to approve and execute an action."""
-    action_id: str = Field(..., description="Action identifier")
-    approved: bool = Field(..., description="Approval status")
-
-
-class ApproveActionResponse(BaseModel):
-    """Response after action approval."""
-    action_id: str
-    approved: bool
-    executed: bool
-    message: str
 
 
 class TodoItem(BaseModel):

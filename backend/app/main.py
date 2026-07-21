@@ -6,10 +6,7 @@ from app.models import (
     QuestionResponse,
     RecapRequest,
     RecapResponse,
-    ProposeActionsRequest,
-    ProposeActionsResponse,
-    ApproveActionRequest,
-    ApproveActionResponse,
+    SessionIdRequest,
     CreateNoteRequest,
     UpdateNoteRequest,
     UpdateEventRequest,
@@ -24,7 +21,6 @@ from app.models import (
     CreateSessionRequest,
 )
 from app.rag import answer_question, generate_recap
-from app.actions import propose_actions, approve_action, list_actions
 from app.stt import process_audio_upload
 from app.store import vector_store
 from app.config import settings
@@ -36,7 +32,7 @@ from app.content_manager import (
 from app.chatbot import chat_with_content
 from app.sessions import register_session, list_sessions
 from app.qa_history import save_qa, list_qa_history
-from app.db import init_db, SessionLocal, NoteRow, TodoRow, CalendarEventRow, ActionRow, SessionRecord, QAHistoryRow
+from app.db import init_db, SessionLocal, NoteRow, TodoRow, CalendarEventRow, SessionRecord, QAHistoryRow
 import logging
 
 # Configure logging
@@ -151,52 +147,6 @@ def get_recap(request: RecapRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/actions/propose", response_model=ProposeActionsResponse)
-def propose_meeting_actions(request: ProposeActionsRequest):
-    """
-    Propose actions from the meeting transcript.
-    HARD RULE: Each action includes evidence quotes.
-    """
-    try:
-        logger.info(f"Proposing actions for session {request.session_id}")
-        actions = propose_actions(request.session_id)
-        return ProposeActionsResponse(actions=actions)
-    except Exception as e:
-        logger.error(f"Error proposing actions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/actions/approve", response_model=ApproveActionResponse)
-def approve_meeting_action(request: ApproveActionRequest):
-    """
-    Approve and execute an action.
-    HARD RULE: Action only executes if approved=True.
-    """
-    try:
-        logger.info(f"Approving action {request.action_id}: approved={request.approved}")
-        
-        # HARD RULE ENFORCEMENT: Only execute if approved=True
-        if not request.approved:
-            logger.info(f"Action {request.action_id} not approved, skipping execution")
-        
-        response = approve_action(request.action_id, request.approved)
-        return response
-    except Exception as e:
-        logger.error(f"Error approving action: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/actions")
-def get_actions(session_id: str = None):
-    """Get all proposed actions, optionally filtered by session."""
-    try:
-        actions = list_actions(session_id)
-        return {"actions": actions}
-    except Exception as e:
-        logger.error(f"Error getting actions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/api/sessions")
 def create_session(request: CreateSessionRequest):
     """Register a new session with its display name (for the history view)."""
@@ -284,7 +234,7 @@ def upload_audio_chunk(
 
 @app.delete("/api/session/{session_id}")
 def delete_session(session_id: str):
-    """Delete a session and all its data (transcript chunks, notes, todos, events, actions, Q&A history)."""
+    """Delete a session and all its data (transcript chunks, notes, todos, events, Q&A history)."""
     try:
         logger.info(f"Deleting session {session_id}")
         vector_store.delete_session(session_id)
@@ -292,7 +242,6 @@ def delete_session(session_id: str):
             db.query(NoteRow).filter(NoteRow.session_id == session_id).delete()
             db.query(TodoRow).filter(TodoRow.session_id == session_id).delete()
             db.query(CalendarEventRow).filter(CalendarEventRow.session_id == session_id).delete()
-            db.query(ActionRow).filter(ActionRow.session_id == session_id).delete()
             db.query(QAHistoryRow).filter(QAHistoryRow.session_id == session_id).delete()
             db.query(SessionRecord).filter(SessionRecord.id == session_id).delete()
             db.commit()
@@ -410,7 +359,7 @@ def delete_note_by_id(note_id: str):
 
 
 @app.post("/api/todos/generate")
-def generate_todos(request: ProposeActionsRequest):
+def generate_todos(request: SessionIdRequest):
     """Generate todo list from meeting transcript."""
     try:
         logger.info(f"Generating todos for session {request.session_id}")
@@ -478,7 +427,7 @@ def delete_todo_by_id(todo_id: str):
 
 
 @app.post("/api/events/generate")
-def generate_events(request: ProposeActionsRequest):
+def generate_events(request: SessionIdRequest):
     """Extract calendar events from meeting transcript."""
     try:
         logger.info(f"Extracting calendar events for session {request.session_id}")

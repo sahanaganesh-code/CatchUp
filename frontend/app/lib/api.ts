@@ -34,19 +34,6 @@ export interface RecapResponse {
   evidence: Evidence[];
 }
 
-export interface ProposedAction {
-  action_id: string;
-  session_id: string;
-  action_type: "notion_task" | "calendar_event" | "email_followup" | "slides";
-  title: string;
-  description: string;
-  evidence: Evidence[];
-  metadata: Record<string, any>;
-  approved: boolean;
-  executed: boolean;
-  created_at: string;
-}
-
 export interface Note {
   note_id: string;
   session_id: string;
@@ -132,27 +119,6 @@ export const api = {
       session_id: sessionId,
     });
     return response.data;
-  },
-
-  async proposeActions(sessionId: string): Promise<ProposedAction[]> {
-    const response = await axios.post(`${API_URL}/api/actions/propose`, {
-      session_id: sessionId,
-    });
-    return response.data.actions;
-  },
-
-  async approveAction(actionId: string, approved: boolean) {
-    const response = await axios.post(`${API_URL}/api/actions/approve`, {
-      action_id: actionId,
-      approved,
-    });
-    return response.data;
-  },
-
-  async getActions(sessionId?: string): Promise<ProposedAction[]> {
-    const params = sessionId ? { session_id: sessionId } : {};
-    const response = await axios.get(`${API_URL}/api/actions`, { params });
-    return response.data.actions;
   },
 
   async uploadAudio(sessionId: string, audioFile: File) {

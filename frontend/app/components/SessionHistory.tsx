@@ -5,7 +5,6 @@ import { ArrowLeft, History, Mic, ScreenShare, Trash2 } from "lucide-react";
 import { api, Session } from "../lib/api";
 import RecapPanel from "./RecapPanel";
 import QAPanel from "./QAPanel";
-import ActionsPanel from "./ActionsPanel";
 import TranscriptViewer from "./TranscriptViewer";
 import TodoPanel from "./TodoPanel";
 import CalendarPanel from "./CalendarPanel";
@@ -97,7 +96,6 @@ export default function SessionHistory({ onBack }: SessionHistoryProps) {
               </div>
               <div className="space-y-6">
                 <NotesPanel sessionId={selectedSession.id} />
-                <ActionsPanel sessionId={selectedSession.id} />
               </div>
             </div>
           </div>

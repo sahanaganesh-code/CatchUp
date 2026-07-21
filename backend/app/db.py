@@ -79,20 +79,6 @@ class CalendarEventRow(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
-class ActionRow(Base):
-    __tablename__ = "actions"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    action_type = Column(String, nullable=False)
-    title = Column(String, nullable=False)
-    description = Column(Text, nullable=False)
-    evidence = Column(JSONB, nullable=False, default=list)
-    action_metadata = Column("metadata", JSONB, nullable=False, default=dict)
-    approved = Column(Boolean, nullable=False, default=False)
-    executed = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-
 class QAHistoryRow(Base):
     __tablename__ = "qa_history"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
