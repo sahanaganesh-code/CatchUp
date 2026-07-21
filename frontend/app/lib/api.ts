@@ -283,6 +283,33 @@ export const api = {
     return response.data;
   },
 
+  async updateEvent(
+    eventId: string,
+    updates: {
+      title?: string;
+      description?: string;
+      date?: string;
+      time?: string;
+      duration_minutes?: number;
+    }
+  ): Promise<CalendarEvent> {
+    const response = await axios.put(`${API_URL}/api/events/${eventId}`, updates);
+    return response.data;
+  },
+
+  async updateTodo(
+    todoId: string,
+    updates: {
+      title?: string;
+      description?: string;
+      priority?: "low" | "medium" | "high";
+      due_date?: string;
+    }
+  ): Promise<TodoItem> {
+    const response = await axios.put(`${API_URL}/api/todos/${todoId}`, updates);
+    return response.data;
+  },
+
   async chatbot(
     question: string,
     contextTypes: ("transcripts" | "notes" | "todos" | "events")[] = [

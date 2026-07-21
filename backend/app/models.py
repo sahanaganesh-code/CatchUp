@@ -155,6 +155,23 @@ class UpdateNoteRequest(BaseModel):
     content: Optional[str] = None
 
 
+class UpdateEventRequest(BaseModel):
+    """Request to update a calendar event."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[str] = None
+    time: Optional[str] = None
+    duration_minutes: Optional[int] = None
+
+
+class UpdateTodoRequest(BaseModel):
+    """Request to update a todo."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[Literal["low", "medium", "high"]] = None
+    due_date: Optional[str] = None
+
+
 class GetTranscriptRequest(BaseModel):
     """Request to get full transcript."""
     session_id: str = Field(..., description="Session identifier")

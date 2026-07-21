@@ -7,7 +7,7 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import select
 from app.models import Note, TodoItem, CalendarEvent, Evidence
-from app.db import SessionLocal, NoteRow, TodoRow, CalendarEventRow
+from app.db import SessionLocal, NoteRow, TodoRow, CalendarEventRow, SessionRecord
 from app.store import vector_store
 from app.gemini_client import generate_text
 from app.config import settings
@@ -26,6 +26,19 @@ You excel at:
 - Understanding context and implicit action items
 - Extracting Google Calendar-compatible event details
 Always provide precise, actionable information with supporting evidence."""
+
+
+def _reference_date_str(session_id: str) -> str:
+    """
+    Transcripts only contain relative day references ("let's meet Thursday",
+    "next week") with no anchor - the LLM has no idea what day the meeting
+    actually happened on. Use the session's creation date as "today" so
+    relative dates resolve to real calendar dates instead of guesses.
+    """
+    with SessionLocal() as db:
+        session_row = db.get(SessionRecord, session_id)
+    reference_date = session_row.created_at if session_row else datetime.utcnow()
+    return reference_date.strftime("%A, %Y-%m-%d")
 
 
 def _note_to_model(row: NoteRow) -> Note:
@@ -124,7 +137,13 @@ def generate_todos_from_meeting(session_id: str) -> List[TodoItem]:
         for chunk in all_chunks[:30]
     ])
 
+    reference_date = _reference_date_str(session_id)
+
     prompt = f"""Analyze this meeting transcript and extract TODO items.
+
+Today's date (the date this meeting is taking place) is {reference_date}. Use this
+as the reference point when resolving any relative date mentioned in the
+transcript (e.g. "by Thursday", "next week", "tomorrow", "end of the month").
 
 Meeting Transcript:
 {context}
@@ -133,7 +152,7 @@ For each actionable todo item, extract:
 1. **Title**: Brief, actionable task description (start with verb)
 2. **Description**: Detailed explanation including context and owner if mentioned
 3. **Priority**: Assess urgency/importance as "low", "medium", or "high"
-4. **Due Date**: Extract or infer deadline (format: YYYY-MM-DD)
+4. **Due Date**: Extract or infer deadline (format: YYYY-MM-DD), resolved against today's date above
 5. **Timestamps**: Relevant timestamps where this task was discussed
 
 Guidelines:
@@ -234,7 +253,15 @@ def generate_calendar_events(session_id: str) -> List[CalendarEvent]:
         for chunk in all_chunks[:30]
     ])
 
+    reference_date = _reference_date_str(session_id)
+
     prompt = f"""Analyze this meeting transcript and extract calendar events for Google Calendar.
+
+Today's date (the date this meeting is taking place) is {reference_date}. Use this
+as the reference point when resolving any relative date mentioned in the
+transcript - e.g. if today is Tuesday 2026-07-21 and someone says "let's meet
+Thursday", that resolves to 2026-07-23 (the NEXT occurrence of that weekday,
+not a past one).
 
 Meeting Transcript:
 {context}
@@ -242,7 +269,7 @@ Meeting Transcript:
 For each mentioned meeting or event, extract:
 1. **Title**: Meeting/event name (clear and descriptive)
 2. **Description**: Purpose, agenda, attendees, or notes
-3. **Date**: Event date (format: YYYY-MM-DD)
+3. **Date**: Event date (format: YYYY-MM-DD), resolved against today's date above
 4. **Time**: Start time (format: HH:MM in 24-hour format)
 5. **Duration**: Length in minutes (default to 60 if not specified)
 6. **Timestamps**: Where in the transcript this was discussed
@@ -351,6 +378,32 @@ def list_todos(session_id: str = None) -> List[TodoItem]:
         return [_todo_to_model(r) for r in rows]
 
 
+def update_todo(
+    todo_id: str,
+    title: str = None,
+    description: str = None,
+    priority: str = None,
+    due_date: str = None,
+) -> Optional[TodoItem]:
+    """Update a todo's fields."""
+    with SessionLocal() as db:
+        row = db.get(TodoRow, todo_id)
+        if not row:
+            return None
+        if title is not None:
+            row.title = title
+        if description is not None:
+            row.description = description
+        if priority is not None:
+            row.priority = priority
+        if due_date is not None:
+            row.due_date = due_date
+        db.commit()
+        db.refresh(row)
+        logger.info(f"Updated todo {todo_id}")
+        return _todo_to_model(row)
+
+
 def complete_todo(todo_id: str, completed: bool) -> Optional[TodoItem]:
     """Mark a todo as completed."""
     with SessionLocal() as db:
@@ -379,6 +432,35 @@ def list_events(session_id: str = None) -> List[CalendarEvent]:
             query = query.where(CalendarEventRow.session_id == session_id)
         rows = db.execute(query).scalars().all()
         return [_event_to_model(r) for r in rows]
+
+
+def update_event(
+    event_id: str,
+    title: str = None,
+    description: str = None,
+    date: str = None,
+    time: str = None,
+    duration_minutes: int = None,
+) -> Optional[CalendarEvent]:
+    """Update a calendar event's fields."""
+    with SessionLocal() as db:
+        row = db.get(CalendarEventRow, event_id)
+        if not row:
+            return None
+        if title is not None:
+            row.title = title
+        if description is not None:
+            row.description = description
+        if date is not None:
+            row.date = date
+        if time is not None:
+            row.time = time
+        if duration_minutes is not None:
+            row.duration_minutes = duration_minutes
+        db.commit()
+        db.refresh(row)
+        logger.info(f"Updated event {event_id}")
+        return _event_to_model(row)
 
 
 def delete_todo(todo_id: str) -> bool:

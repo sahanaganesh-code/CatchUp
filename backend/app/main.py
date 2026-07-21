@@ -12,6 +12,8 @@ from app.models import (
     ApproveActionResponse,
     CreateNoteRequest,
     UpdateNoteRequest,
+    UpdateEventRequest,
+    UpdateTodoRequest,
     Note,
     TodoItem,
     CalendarEvent,
@@ -28,8 +30,8 @@ from app.store import vector_store
 from app.config import settings
 from app.content_manager import (
     create_note, get_note, list_notes, update_note, delete_note,
-    generate_todos_from_meeting, list_todos, get_todo, complete_todo, delete_todo,
-    generate_calendar_events, list_events, get_event, delete_event
+    generate_todos_from_meeting, list_todos, get_todo, complete_todo, update_todo, delete_todo,
+    generate_calendar_events, list_events, get_event, update_event, delete_event
 )
 from app.chatbot import chat_with_content
 from app.sessions import register_session, list_sessions
@@ -445,6 +447,21 @@ def mark_todo_complete(todo_id: str, completed: bool = True):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.put("/api/todos/{todo_id}", response_model=TodoItem)
+def update_existing_todo(todo_id: str, request: UpdateTodoRequest):
+    """Update a todo's fields."""
+    try:
+        todo = update_todo(todo_id, request.title, request.description, request.priority, request.due_date)
+        if not todo:
+            raise HTTPException(status_code=404, detail="Todo not found")
+        return todo
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating todo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/api/todos/{todo_id}")
 def delete_todo_by_id(todo_id: str):
     """Delete a todo."""
@@ -480,6 +497,21 @@ def get_calendar_events(session_id: str = None):
         return {"events": events}
     except Exception as e:
         logger.error(f"Error getting events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/events/{event_id}", response_model=CalendarEvent)
+def update_existing_event(event_id: str, request: UpdateEventRequest):
+    """Update a calendar event's fields."""
+    try:
+        event = update_event(event_id, request.title, request.description, request.date, request.time, request.duration_minutes)
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        return event
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
