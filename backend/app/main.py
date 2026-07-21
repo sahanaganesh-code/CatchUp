@@ -18,7 +18,8 @@ from app.models import (
     GetTranscriptRequest,
     TranscriptResponse,
     ChatbotRequest,
-    ChatbotResponse
+    ChatbotResponse,
+    CreateSessionRequest,
 )
 from app.rag import answer_question, generate_recap
 from app.actions import propose_actions, approve_action, list_actions
@@ -31,6 +32,8 @@ from app.content_manager import (
     generate_calendar_events, list_events, get_event, delete_event
 )
 from app.chatbot import chat_with_content
+from app.sessions import register_session, list_sessions
+from app.db import init_db, SessionLocal, NoteRow, TodoRow, CalendarEventRow, ActionRow, SessionRecord
 import logging
 
 # Configure logging
@@ -55,6 +58,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    """Create tables/extension if they don't exist yet. Idempotent, safe on every boot."""
+    init_db()
+    logger.info("Database initialized")
 
 
 @app.get("/")
@@ -158,13 +168,36 @@ def approve_meeting_action(request: ApproveActionRequest):
 
 
 @app.get("/api/actions")
-def get_actions():
-    """Get all proposed actions."""
+def get_actions(session_id: str = None):
+    """Get all proposed actions, optionally filtered by session."""
     try:
-        actions = list_actions()
+        actions = list_actions(session_id)
         return {"actions": actions}
     except Exception as e:
         logger.error(f"Error getting actions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sessions")
+def create_session(request: CreateSessionRequest):
+    """Register a new session with its display name (for the history view)."""
+    try:
+        logger.info(f"Registering session {request.id}: {request.display_name} ({request.mode})")
+        session = register_session(request.id, request.display_name, request.mode)
+        return session
+    except Exception as e:
+        logger.error(f"Error registering session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sessions")
+def get_sessions():
+    """List all sessions, newest first."""
+    try:
+        sessions = list_sessions()
+        return {"sessions": sessions}
+    except Exception as e:
+        logger.error(f"Error listing sessions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -232,10 +265,17 @@ def upload_audio_chunk(
 
 @app.delete("/api/session/{session_id}")
 def delete_session(session_id: str):
-    """Delete a session and all its data."""
+    """Delete a session and all its data (transcript chunks, notes, todos, events, actions)."""
     try:
         logger.info(f"Deleting session {session_id}")
         vector_store.delete_session(session_id)
+        with SessionLocal() as db:
+            db.query(NoteRow).filter(NoteRow.session_id == session_id).delete()
+            db.query(TodoRow).filter(TodoRow.session_id == session_id).delete()
+            db.query(CalendarEventRow).filter(CalendarEventRow.session_id == session_id).delete()
+            db.query(ActionRow).filter(ActionRow.session_id == session_id).delete()
+            db.query(SessionRecord).filter(SessionRecord.id == session_id).delete()
+            db.commit()
         return {"status": "success", "session_id": session_id}
     except Exception as e:
         logger.error(f"Error deleting session: {e}")
@@ -362,10 +402,10 @@ def generate_todos(request: ProposeActionsRequest):
 
 
 @app.get("/api/todos")
-def get_todos():
-    """Get all todos."""
+def get_todos(session_id: str = None):
+    """Get all todos, optionally filtered by session."""
     try:
-        todos = list_todos()
+        todos = list_todos(session_id)
         return {"todos": todos}
     except Exception as e:
         logger.error(f"Error getting todos: {e}")
@@ -415,10 +455,10 @@ def generate_events(request: ProposeActionsRequest):
 
 
 @app.get("/api/events")
-def get_calendar_events():
-    """Get all calendar events."""
+def get_calendar_events(session_id: str = None):
+    """Get all calendar events, optionally filtered by session."""
     try:
-        events = list_events()
+        events = list_events(session_id)
         return {"events": events}
     except Exception as e:
         logger.error(f"Error getting events: {e}")

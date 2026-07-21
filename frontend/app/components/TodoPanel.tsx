@@ -14,6 +14,12 @@ export default function TodoPanel({ sessionId }: TodoPanelProps) {
   const [loading, setLoading] = useState(false);
   const [expandedTodo, setExpandedTodo] = useState<string | null>(null);
 
+  useEffect(() => {
+    api.getTodos(sessionId).then(setTodos).catch((error) => {
+      console.error("Error loading todos:", error);
+    });
+  }, [sessionId]);
+
   const handleGenerateTodos = async () => {
     setLoading(true);
     try {

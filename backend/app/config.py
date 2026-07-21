@@ -10,10 +10,10 @@ class Settings(BaseSettings):
     # Google Workspace (optional for future integration)
     google_calendar_enabled: bool = False
 
-    # ChromaDB
-    chroma_persist_dir: str = "./chroma_db"
-    chroma_collection_name: str = "catchup_transcripts_gemini"
-    
+    # Database (Postgres + pgvector - required, no default)
+    database_url: str
+    gemini_embed_dim: int = 3072  # empirically verified output size of gemini-embedding-001
+
     # Models - Using Google's Gemini for everything
     gemini_model: str = "gemini-flash-lite-latest"  # Fast, efficient for meeting analysis
     gemini_embed_model: str = "models/gemini-embedding-001"  # Optimized embeddings

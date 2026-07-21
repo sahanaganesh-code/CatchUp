@@ -28,6 +28,7 @@ export interface RecapResponse {
 
 export interface ProposedAction {
   action_id: string;
+  session_id: string;
   action_type: "notion_task" | "calendar_event" | "email_followup" | "slides";
   title: string;
   description: string;
@@ -50,6 +51,7 @@ export interface Note {
 
 export interface TodoItem {
   todo_id: string;
+  session_id: string;
   title: string;
   description: string;
   priority: "low" | "medium" | "high";
@@ -61,6 +63,7 @@ export interface TodoItem {
 
 export interface CalendarEvent {
   event_id: string;
+  session_id: string;
   title: string;
   description: string;
   date?: string;
@@ -75,6 +78,13 @@ export interface ChatbotResponse {
   evidence: Evidence[];
   sources: string[];
   has_sufficient_evidence: boolean;
+}
+
+export interface Session {
+  id: string;
+  display_name: string;
+  mode: "in-person" | "screen-share";
+  created_at: string;
 }
 
 export const api = {
@@ -122,6 +132,12 @@ export const api = {
       approved,
     });
     return response.data;
+  },
+
+  async getActions(sessionId?: string): Promise<ProposedAction[]> {
+    const params = sessionId ? { session_id: sessionId } : {};
+    const response = await axios.get(`${API_URL}/api/actions`, { params });
+    return response.data.actions;
   },
 
   async uploadAudio(sessionId: string, audioFile: File) {
@@ -216,8 +232,9 @@ export const api = {
     return response.data.todos;
   },
 
-  async getTodos(): Promise<TodoItem[]> {
-    const response = await axios.get(`${API_URL}/api/todos`);
+  async getTodos(sessionId?: string): Promise<TodoItem[]> {
+    const params = sessionId ? { session_id: sessionId } : {};
+    const response = await axios.get(`${API_URL}/api/todos`, { params });
     return response.data.todos;
   },
 
@@ -240,8 +257,9 @@ export const api = {
     return response.data.events;
   },
 
-  async getEvents(): Promise<CalendarEvent[]> {
-    const response = await axios.get(`${API_URL}/api/events`);
+  async getEvents(sessionId?: string): Promise<CalendarEvent[]> {
+    const params = sessionId ? { session_id: sessionId } : {};
+    const response = await axios.get(`${API_URL}/api/events`, { params });
     return response.data.events;
   },
 
@@ -264,5 +282,23 @@ export const api = {
       context_types: contextTypes,
     });
     return response.data;
+  },
+
+  async createSession(
+    id: string,
+    displayName: string,
+    mode: "in-person" | "screen-share"
+  ): Promise<Session> {
+    const response = await axios.post(`${API_URL}/api/sessions`, {
+      id,
+      display_name: displayName,
+      mode,
+    });
+    return response.data;
+  },
+
+  async getSessions(): Promise<Session[]> {
+    const response = await axios.get(`${API_URL}/api/sessions`);
+    return response.data.sessions;
   },
 };

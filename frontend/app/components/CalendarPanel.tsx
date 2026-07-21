@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, Trash2, Loader2, Clock } from "lucide-react";
 import { api, CalendarEvent } from "../lib/api";
 import EvidenceList from "./EvidenceList";
@@ -13,6 +13,12 @@ export default function CalendarPanel({ sessionId }: CalendarPanelProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getEvents(sessionId).then(setEvents).catch((error) => {
+      console.error("Error loading events:", error);
+    });
+  }, [sessionId]);
 
   const handleGenerateEvents = async () => {
     setLoading(true);

@@ -59,6 +59,7 @@ class ActionType(str):
 class ProposedAction(BaseModel):
     """A proposed action from the meeting."""
     action_id: str = Field(..., description="Unique action identifier")
+    session_id: str = Field(..., description="Associated session")
     action_type: Literal["notion_task", "calendar_event", "email_followup", "slides"]
     title: str = Field(..., description="Action title")
     description: str = Field(..., description="Action description")
@@ -96,6 +97,7 @@ class ApproveActionResponse(BaseModel):
 class TodoItem(BaseModel):
     """A todo item extracted from meeting."""
     todo_id: str = Field(..., description="Unique todo identifier")
+    session_id: str = Field(..., description="Associated session")
     title: str = Field(..., description="Todo title")
     description: str = Field(..., description="Todo description")
     priority: Literal["low", "medium", "high"] = Field(default="medium")
@@ -108,6 +110,7 @@ class TodoItem(BaseModel):
 class CalendarEvent(BaseModel):
     """A calendar event extracted from meeting."""
     event_id: str = Field(..., description="Unique event identifier")
+    session_id: str = Field(..., description="Associated session")
     title: str = Field(..., description="Event title")
     description: str = Field(..., description="Event description")
     date: Optional[str] = Field(None, description="Event date (YYYY-MM-DD)")
@@ -170,3 +173,18 @@ class ChatbotResponse(BaseModel):
     evidence: List[Evidence] = Field(..., description="Supporting evidence")
     sources: List[str] = Field(..., description="Source types used (transcript/note/todo/event)")
     has_sufficient_evidence: bool = Field(..., description="Whether sufficient evidence was found")
+
+
+class Session(BaseModel):
+    """A registered meeting/capture session, for the history view."""
+    id: str = Field(..., description="Session identifier")
+    display_name: str = Field(..., description="User-facing session name")
+    mode: Literal["in-person", "screen-share"] = Field(..., description="Capture mode")
+    created_at: datetime = Field(..., description="When the session was created")
+
+
+class CreateSessionRequest(BaseModel):
+    """Request to register a new session."""
+    id: str = Field(..., description="Session identifier")
+    display_name: str = Field(..., description="User-facing session name")
+    mode: Literal["in-person", "screen-share"] = Field(..., description="Capture mode")

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Mic, ScreenShare } from "lucide-react";
+import { Mic, ScreenShare, History } from "lucide-react";
 import InPersonMode from "./components/InPersonMode";
 import ScreenCaptureMode from "./components/ScreenCaptureMode";
+import SessionHistory from "./components/SessionHistory";
 import AIChatbot from "./components/AIChatbot";
 
 export default function Home() {
-  const [mode, setMode] = useState<"in-person" | "screen-share" | null>(null);
+  const [mode, setMode] = useState<"in-person" | "screen-share" | "history" | null>(null);
 
   if (mode === "in-person") {
     return <InPersonMode onBack={() => setMode(null)} />;
@@ -15,6 +16,10 @@ export default function Home() {
 
   if (mode === "screen-share") {
     return <ScreenCaptureMode onBack={() => setMode(null)} />;
+  }
+
+  if (mode === "history") {
+    return <SessionHistory onBack={() => setMode(null)} />;
   }
 
   return (
@@ -74,7 +79,17 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="mt-12 text-center">
+        <div className="mt-8 text-center">
+          <button
+            onClick={() => setMode("history")}
+            className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            <History className="w-4 h-4 mr-1.5" />
+            View Past Sessions
+          </button>
+        </div>
+
+        <div className="mt-8 text-center">
           <div className="inline-block bg-blue-50 border border-blue-200 rounded-lg px-6 py-3">
             <p className="text-sm text-blue-900 font-medium mb-1">
               ♿ Built for Accessibility

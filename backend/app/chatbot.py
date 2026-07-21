@@ -5,7 +5,7 @@ meeting transcripts, notes, todos, and calendar events.
 from typing import List
 from app.models import ChatbotResponse, Evidence
 from app.store import vector_store
-from app.content_manager import notes_store, todos_store, events_store
+from app.content_manager import list_notes, list_todos, list_events
 from app.gemini_client import generate_text
 from app.config import settings
 import logging
@@ -50,7 +50,7 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
     if "notes" in context_types:
         logger.info("Searching notes...")
         context_parts.append("\n=== NOTES ===")
-        for note in list(notes_store.values())[:10]:  # Limit to recent notes
+        for note in list_notes()[:10]:  # Limit to recent notes
             context_parts.append(f"\nTitle: {note.title} (Date: {note.date})")
             context_parts.append(f"Content: {note.content[:300]}")
             # Add as evidence
@@ -64,7 +64,7 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
     if "todos" in context_types:
         logger.info("Searching todos...")
         context_parts.append("\n=== TODO ITEMS ===")
-        for todo in list(todos_store.values())[:10]:
+        for todo in list_todos()[:10]:
             status = "✓ Completed" if todo.completed else "○ Pending"
             context_parts.append(f"\n{status}: {todo.title}")
             context_parts.append(f"Description: {todo.description}")
@@ -77,11 +77,11 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
                 speaker="Todo List"
             ))
     
-    # Search Google Calendar events
+    # Search calendar events
     if "events" in context_types:
-        logger.info("Searching Google Calendar events...")
-        context_parts.append("\n=== GOOGLE CALENDAR EVENTS ===")
-        for event in list(events_store.values())[:10]:
+        logger.info("Searching calendar events...")
+        context_parts.append("\n=== CALENDAR EVENTS ===")
+        for event in list_events()[:10]:
             context_parts.append(f"\nEvent: {event.title}")
             context_parts.append(f"Description: {event.description}")
             if event.date:
@@ -161,11 +161,11 @@ Provide a comprehensive, evidence-based answer:"""
         
         # Determine which sources were used
         sources = []
-        if "notes" in context_types and any(n for n in notes_store.values()):
+        if "notes" in context_types and list_notes():
             sources.append("notes")
-        if "todos" in context_types and any(t for t in todos_store.values()):
+        if "todos" in context_types and list_todos():
             sources.append("todos")
-        if "events" in context_types and any(e for e in events_store.values()):
+        if "events" in context_types and list_events():
             sources.append("events")
         if "transcripts" in context_types:
             sources.append("transcripts")

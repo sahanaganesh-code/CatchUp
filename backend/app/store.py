@@ -1,123 +1,103 @@
-import chromadb
-from chromadb.config import Settings as ChromaSettings
 from typing import List, Dict, Any
 import hashlib
+from sqlalchemy import select, delete
 from app.config import settings
-from app.models import TranscriptChunk, Evidence
+from app.models import TranscriptChunk
 from app.gemini_client import embed_texts
+from app.db import SessionLocal, TranscriptChunkRow
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class VectorStore:
-    """ChromaDB vector store for transcript chunks."""
-    
-    def __init__(self):
-        self.client = chromadb.PersistentClient(
-            path=settings.chroma_persist_dir,
-            settings=ChromaSettings(anonymized_telemetry=False)
-        )
-        self.collection = self.client.get_or_create_collection(
-            name=settings.chroma_collection_name,
-            metadata={"hnsw:space": "cosine"}
-        )
-        logger.info(f"Initialized ChromaDB collection: {settings.chroma_collection_name} (Gemini embeddings)")
-    
+    """Postgres + pgvector store for transcript chunks."""
+
     def _generate_chunk_id(self, session_id: str, timestamp: str, text: str) -> str:
         """Generate unique ID for a chunk."""
         content = f"{session_id}:{timestamp}:{text}"
         return hashlib.md5(content.encode()).hexdigest()
-    
+
     def add_chunks(self, session_id: str, chunks: List[TranscriptChunk]) -> None:
         """Add transcript chunks to the vector store."""
         if not chunks:
             return
-        
-        ids = []
-        documents = []
-        metadatas = []
-        
-        for chunk in chunks:
-            chunk_id = self._generate_chunk_id(session_id, chunk.timestamp, chunk.text)
-            ids.append(chunk_id)
-            documents.append(chunk.text)
-            metadatas.append({
-                "session_id": session_id,
-                "timestamp": chunk.timestamp,
-                "speaker": chunk.speaker or "Unknown"
-            })
-        
+
+        documents = [c.text for c in chunks]
+
         # Generate embeddings using Gemini with RETRIEVAL_DOCUMENT task type
         embeddings = embed_texts(documents, task_type="RETRIEVAL_DOCUMENT")
-        
-        self.collection.add(
-            ids=ids,
-            documents=documents,
-            embeddings=embeddings,
-            metadatas=metadatas
-        )
+
+        with SessionLocal() as db:
+            for chunk, embedding in zip(chunks, embeddings):
+                row = TranscriptChunkRow(
+                    id=self._generate_chunk_id(session_id, chunk.timestamp, chunk.text),
+                    session_id=session_id,
+                    timestamp=chunk.timestamp,
+                    speaker=chunk.speaker or "Unknown",
+                    text=chunk.text,
+                    embedding=embedding,
+                )
+                db.merge(row)
+            db.commit()
+
         logger.info(f"Added {len(chunks)} chunks for session {session_id} with Gemini embeddings")
-    
+
     def query_chunks(
-        self, 
-        session_id: str, 
-        query_text: str, 
+        self,
+        session_id: str,
+        query_text: str,
         top_k: int = None
     ) -> List[Dict[str, Any]]:
         """Query relevant chunks for a session."""
         if top_k is None:
             top_k = settings.retrieval_top_k
-        
+
         # Generate query embedding using Gemini with RETRIEVAL_QUERY task type
-        query_embeddings = embed_texts([query_text], task_type="RETRIEVAL_QUERY")
-        
-        results = self.collection.query(
-            query_embeddings=query_embeddings,
-            n_results=top_k,
-            where={"session_id": session_id}
-        )
-        
-        chunks = []
-        if results["documents"] and results["documents"][0]:
-            for i, doc in enumerate(results["documents"][0]):
-                metadata = results["metadatas"][0][i]
-                chunks.append({
-                    "text": doc,
-                    "timestamp": metadata["timestamp"],
-                    "speaker": metadata.get("speaker", "Unknown"),
-                    "distance": results["distances"][0][i] if "distances" in results else None
-                })
-        
+        query_embedding = embed_texts([query_text], task_type="RETRIEVAL_QUERY")[0]
+
+        with SessionLocal() as db:
+            distance = TranscriptChunkRow.embedding.cosine_distance(query_embedding)
+            rows = db.execute(
+                select(TranscriptChunkRow, distance.label("distance"))
+                .where(TranscriptChunkRow.session_id == session_id)
+                .order_by(distance)
+                .limit(top_k)
+            ).all()
+
+        chunks = [
+            {
+                "text": row.TranscriptChunkRow.text,
+                "timestamp": row.TranscriptChunkRow.timestamp,
+                "speaker": row.TranscriptChunkRow.speaker or "Unknown",
+                "distance": row.distance,
+            }
+            for row in rows
+        ]
+
         logger.info(f"Retrieved {len(chunks)} chunks for query in session {session_id}")
         return chunks
-    
+
     def get_all_chunks(self, session_id: str) -> List[Dict[str, Any]]:
-        """Get all chunks for a session."""
-        results = self.collection.get(
-            where={"session_id": session_id}
-        )
-        
-        chunks = []
-        if results["documents"]:
-            for i, doc in enumerate(results["documents"]):
-                metadata = results["metadatas"][i]
-                chunks.append({
-                    "text": doc,
-                    "timestamp": metadata["timestamp"],
-                    "speaker": metadata.get("speaker", "Unknown")
-                })
-        
-        # Sort by timestamp
-        chunks.sort(key=lambda x: x["timestamp"])
-        return chunks
-    
+        """Get all chunks for a session, sorted by timestamp."""
+        with SessionLocal() as db:
+            rows = db.execute(
+                select(TranscriptChunkRow)
+                .where(TranscriptChunkRow.session_id == session_id)
+                .order_by(TranscriptChunkRow.timestamp)
+            ).scalars().all()
+
+        return [
+            {"text": r.text, "timestamp": r.timestamp, "speaker": r.speaker or "Unknown"}
+            for r in rows
+        ]
+
     def delete_session(self, session_id: str) -> None:
         """Delete all chunks for a session."""
-        results = self.collection.get(where={"session_id": session_id})
-        if results["ids"]:
-            self.collection.delete(ids=results["ids"])
-            logger.info(f"Deleted session {session_id}")
+        with SessionLocal() as db:
+            db.execute(delete(TranscriptChunkRow).where(TranscriptChunkRow.session_id == session_id))
+            db.commit()
+        logger.info(f"Deleted chunks for session {session_id}")
 
 
 # Global instance

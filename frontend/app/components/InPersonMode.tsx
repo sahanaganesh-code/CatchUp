@@ -54,6 +54,7 @@ export default function InPersonMode({ onBack }: InPersonModeProps) {
 
     setIsStarting(true);
     try {
+      await api.createSession(newSessionId, lectureId.trim(), "in-person");
       await api.ingestTranscript(newSessionId, "in-person", mockChunks);
       setSessionId(newSessionId);
     } catch (error) {

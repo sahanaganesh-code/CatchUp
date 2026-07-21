@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Zap, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { api, ProposedAction } from "../lib/api";
 import EvidenceList from "./EvidenceList";
@@ -27,6 +27,12 @@ export default function ActionsPanel({ sessionId }: ActionsPanelProps) {
   const [actions, setActions] = useState<ProposedAction[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedAction, setExpandedAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getActions(sessionId).then(setActions).catch((error) => {
+      console.error("Error loading actions:", error);
+    });
+  }, [sessionId]);
 
   const handleProposeActions = async () => {
     setLoading(true);

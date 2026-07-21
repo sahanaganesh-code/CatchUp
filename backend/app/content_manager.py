@@ -1,18 +1,19 @@
 """
 Content manager for notes, todos, and calendar events.
-Optimized for meeting transcripts and Google Calendar integration.
-In production, these would be stored in a database and synced with Google Workspace.
+Optimized for meeting transcripts and calendar integration.
+Persisted in Postgres (see app/db.py).
 """
-from typing import List, Dict, Optional
+from typing import List, Optional
 from datetime import datetime
+from sqlalchemy import select
 from app.models import Note, TodoItem, CalendarEvent, Evidence
+from app.db import SessionLocal, NoteRow, TodoRow, CalendarEventRow
 from app.store import vector_store
-from app.gemini_client import generate_text, generate_structured_output
+from app.gemini_client import generate_text
 from app.config import settings
 import uuid
 import logging
 import json
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -26,62 +27,85 @@ You excel at:
 - Extracting Google Calendar-compatible event details
 Always provide precise, actionable information with supporting evidence."""
 
-# In-memory stores (in production, use PostgreSQL)
-notes_store: Dict[str, Note] = {}
-todos_store: Dict[str, TodoItem] = {}
-events_store: Dict[str, CalendarEvent] = {}
+
+def _note_to_model(row: NoteRow) -> Note:
+    return Note(
+        note_id=row.id, session_id=row.session_id, title=row.title,
+        content=row.content, date=row.date, created_at=row.created_at, updated_at=row.updated_at,
+    )
+
+
+def _todo_to_model(row: TodoRow) -> TodoItem:
+    return TodoItem(
+        todo_id=row.id, session_id=row.session_id, title=row.title, description=row.description,
+        priority=row.priority, due_date=row.due_date,
+        evidence=[Evidence(**e) for e in row.evidence], completed=row.completed, created_at=row.created_at,
+    )
+
+
+def _event_to_model(row: CalendarEventRow) -> CalendarEvent:
+    return CalendarEvent(
+        event_id=row.id, session_id=row.session_id, title=row.title, description=row.description,
+        date=row.date, time=row.time, duration_minutes=row.duration_minutes,
+        evidence=[Evidence(**e) for e in row.evidence], created_at=row.created_at,
+    )
 
 
 def create_note(session_id: str, title: str, content: str, date: str) -> Note:
     """Create a new note."""
-    note_id = str(uuid.uuid4())
-    note = Note(
-        note_id=note_id,
-        session_id=session_id,
-        title=title,
-        content=content,
-        date=date
-    )
-    notes_store[note_id] = note
-    logger.info(f"Created note {note_id}: {title}")
-    return note
+    with SessionLocal() as db:
+        row = NoteRow(id=str(uuid.uuid4()), session_id=session_id, title=title, content=content, date=date)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        logger.info(f"Created note {row.id}: {title}")
+        return _note_to_model(row)
 
 
 def get_note(note_id: str) -> Optional[Note]:
     """Get a note by ID."""
-    return notes_store.get(note_id)
+    with SessionLocal() as db:
+        row = db.get(NoteRow, note_id)
+        return _note_to_model(row) if row else None
 
 
 def list_notes(session_id: str = None) -> List[Note]:
     """List all notes, optionally filtered by session."""
-    if session_id:
-        return [n for n in notes_store.values() if n.session_id == session_id]
-    return list(notes_store.values())
+    with SessionLocal() as db:
+        query = select(NoteRow)
+        if session_id:
+            query = query.where(NoteRow.session_id == session_id)
+        rows = db.execute(query).scalars().all()
+        return [_note_to_model(r) for r in rows]
 
 
 def update_note(note_id: str, title: str = None, content: str = None) -> Optional[Note]:
     """Update a note."""
-    if note_id not in notes_store:
-        return None
-    
-    note = notes_store[note_id]
-    if title:
-        note.title = title
-    if content:
-        note.content = content
-    note.updated_at = datetime.utcnow()
-    
-    logger.info(f"Updated note {note_id}")
-    return note
+    with SessionLocal() as db:
+        row = db.get(NoteRow, note_id)
+        if not row:
+            return None
+        if title:
+            row.title = title
+        if content:
+            row.content = content
+        row.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(row)
+        logger.info(f"Updated note {note_id}")
+        return _note_to_model(row)
 
 
 def delete_note(note_id: str) -> bool:
     """Delete a note."""
-    if note_id in notes_store:
-        del notes_store[note_id]
+    with SessionLocal() as db:
+        row = db.get(NoteRow, note_id)
+        if not row:
+            return False
+        db.delete(row)
+        db.commit()
         logger.info(f"Deleted note {note_id}")
         return True
-    return False
 
 
 def generate_todos_from_meeting(session_id: str) -> List[TodoItem]:
@@ -90,16 +114,16 @@ def generate_todos_from_meeting(session_id: str) -> List[TodoItem]:
     Extracts action items with dates and priorities.
     """
     logger.info(f"Generating todos for session {session_id}")
-    
+
     all_chunks = vector_store.get_all_chunks(session_id)
     if not all_chunks:
         return []
-    
+
     context = "\n\n".join([
         f"[{chunk['timestamp']}] {chunk.get('speaker', 'Speaker')}: {chunk['text']}"
         for chunk in all_chunks[:30]
     ])
-    
+
     prompt = f"""Analyze this meeting transcript and extract TODO items.
 
 Meeting Transcript:
@@ -129,64 +153,66 @@ Provide response as a JSON array:
     "timestamps": ["00:01:20", "00:02:30"]
   }}
 ]"""
-    
+
     try:
         content = generate_text(
-            prompt, 
+            prompt,
             model=settings.gemini_model,
             temperature=0.2,  # Low temperature for precise extraction
             system_instruction=CONTENT_EXTRACTION_SYSTEM_INSTRUCTION
         ).strip()
-        
+
         # Extract JSON
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
-        
+
         todos_data = json.loads(content)
-        
+
         todos = []
-        for todo_data in todos_data:
-            todo_id = str(uuid.uuid4())
-            
-            # Find evidence
-            evidence = []
-            for ts in todo_data.get("timestamps", [])[:settings.max_evidence_quotes]:
-                matching = [c for c in all_chunks if c["timestamp"] == ts]
-                if matching:
-                    evidence.append(Evidence(
-                        timestamp=matching[0]["timestamp"],
-                        quote=matching[0]["text"][:200],
-                        speaker=matching[0].get("speaker")
-                    ))
-            
-            # Ensure minimum evidence
-            if len(evidence) < settings.min_evidence_quotes:
-                for chunk in all_chunks[:settings.max_evidence_quotes]:
-                    if len(evidence) >= settings.max_evidence_quotes:
-                        break
-                    evidence.append(Evidence(
-                        timestamp=chunk["timestamp"],
-                        quote=chunk["text"][:200],
-                        speaker=chunk.get("speaker")
-                    ))
-            
-            todo = TodoItem(
-                todo_id=todo_id,
-                title=todo_data["title"],
-                description=todo_data["description"],
-                priority=todo_data.get("priority", "medium"),
-                due_date=todo_data.get("due_date"),
-                evidence=evidence[:settings.max_evidence_quotes]
-            )
-            
-            todos_store[todo_id] = todo
-            todos.append(todo)
-        
+        with SessionLocal() as db:
+            for todo_data in todos_data:
+                # Find evidence
+                evidence = []
+                for ts in todo_data.get("timestamps", [])[:settings.max_evidence_quotes]:
+                    matching = [c for c in all_chunks if c["timestamp"] == ts]
+                    if matching:
+                        evidence.append(Evidence(
+                            timestamp=matching[0]["timestamp"],
+                            quote=matching[0]["text"][:200],
+                            speaker=matching[0].get("speaker")
+                        ))
+
+                # Ensure minimum evidence
+                if len(evidence) < settings.min_evidence_quotes:
+                    for chunk in all_chunks[:settings.max_evidence_quotes]:
+                        if len(evidence) >= settings.max_evidence_quotes:
+                            break
+                        evidence.append(Evidence(
+                            timestamp=chunk["timestamp"],
+                            quote=chunk["text"][:200],
+                            speaker=chunk.get("speaker")
+                        ))
+
+                evidence = evidence[:settings.max_evidence_quotes]
+                row = TodoRow(
+                    id=str(uuid.uuid4()),
+                    session_id=session_id,
+                    title=todo_data["title"],
+                    description=todo_data["description"],
+                    priority=todo_data.get("priority", "medium"),
+                    due_date=todo_data.get("due_date"),
+                    evidence=[e.model_dump() for e in evidence],
+                )
+                db.add(row)
+                db.flush()
+                todos.append(_todo_to_model(row))
+            db.commit()
+
         logger.info(f"Generated {len(todos)} todos for session {session_id}")
         return todos
-    
+
     except Exception as e:
         logger.error(f"Error generating todos: {e}")
         return []
@@ -198,16 +224,16 @@ def generate_calendar_events(session_id: str) -> List[CalendarEvent]:
     Looks for dates, times, and meeting mentions.
     """
     logger.info(f"Extracting calendar events for session {session_id}")
-    
+
     all_chunks = vector_store.get_all_chunks(session_id)
     if not all_chunks:
         return []
-    
+
     context = "\n\n".join([
         f"[{chunk['timestamp']}] {chunk.get('speaker', 'Speaker')}: {chunk['text']}"
         for chunk in all_chunks[:30]
     ])
-    
+
     prompt = f"""Analyze this meeting transcript and extract calendar events for Google Calendar.
 
 Meeting Transcript:
@@ -242,65 +268,67 @@ Provide response as a JSON array:
 ]
 
 Only include meetings/events that have at least a date or time reference."""
-    
+
     try:
         content = generate_text(
-            prompt, 
+            prompt,
             model=settings.gemini_model,
             temperature=0.2,  # Low temperature for precise extraction
             system_instruction=CONTENT_EXTRACTION_SYSTEM_INSTRUCTION
         ).strip()
-        
+
         # Extract JSON
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
-        
+
         events_data = json.loads(content)
-        
+
         events = []
-        for event_data in events_data:
-            event_id = str(uuid.uuid4())
-            
-            # Find evidence
-            evidence = []
-            for ts in event_data.get("timestamps", [])[:settings.max_evidence_quotes]:
-                matching = [c for c in all_chunks if c["timestamp"] == ts]
-                if matching:
-                    evidence.append(Evidence(
-                        timestamp=matching[0]["timestamp"],
-                        quote=matching[0]["text"][:200],
-                        speaker=matching[0].get("speaker")
-                    ))
-            
-            # Ensure minimum evidence
-            if len(evidence) < settings.min_evidence_quotes:
-                for chunk in all_chunks[:settings.max_evidence_quotes]:
-                    if len(evidence) >= settings.max_evidence_quotes:
-                        break
-                    evidence.append(Evidence(
-                        timestamp=chunk["timestamp"],
-                        quote=chunk["text"][:200],
-                        speaker=chunk.get("speaker")
-                    ))
-            
-            event = CalendarEvent(
-                event_id=event_id,
-                title=event_data["title"],
-                description=event_data["description"],
-                date=event_data.get("date"),
-                time=event_data.get("time"),
-                duration_minutes=event_data.get("duration_minutes"),
-                evidence=evidence[:settings.max_evidence_quotes]
-            )
-            
-            events_store[event_id] = event
-            events.append(event)
-        
+        with SessionLocal() as db:
+            for event_data in events_data:
+                # Find evidence
+                evidence = []
+                for ts in event_data.get("timestamps", [])[:settings.max_evidence_quotes]:
+                    matching = [c for c in all_chunks if c["timestamp"] == ts]
+                    if matching:
+                        evidence.append(Evidence(
+                            timestamp=matching[0]["timestamp"],
+                            quote=matching[0]["text"][:200],
+                            speaker=matching[0].get("speaker")
+                        ))
+
+                # Ensure minimum evidence
+                if len(evidence) < settings.min_evidence_quotes:
+                    for chunk in all_chunks[:settings.max_evidence_quotes]:
+                        if len(evidence) >= settings.max_evidence_quotes:
+                            break
+                        evidence.append(Evidence(
+                            timestamp=chunk["timestamp"],
+                            quote=chunk["text"][:200],
+                            speaker=chunk.get("speaker")
+                        ))
+
+                evidence = evidence[:settings.max_evidence_quotes]
+                row = CalendarEventRow(
+                    id=str(uuid.uuid4()),
+                    session_id=session_id,
+                    title=event_data["title"],
+                    description=event_data["description"],
+                    date=event_data.get("date"),
+                    time=event_data.get("time"),
+                    duration_minutes=event_data.get("duration_minutes"),
+                    evidence=[e.model_dump() for e in evidence],
+                )
+                db.add(row)
+                db.flush()
+                events.append(_event_to_model(row))
+            db.commit()
+
         logger.info(f"Extracted {len(events)} calendar events for session {session_id}")
         return events
-    
+
     except Exception as e:
         logger.error(f"Error extracting calendar events: {e}")
         return []
@@ -308,44 +336,68 @@ Only include meetings/events that have at least a date or time reference."""
 
 def get_todo(todo_id: str) -> Optional[TodoItem]:
     """Get a todo by ID."""
-    return todos_store.get(todo_id)
+    with SessionLocal() as db:
+        row = db.get(TodoRow, todo_id)
+        return _todo_to_model(row) if row else None
 
 
 def list_todos(session_id: str = None) -> List[TodoItem]:
-    """List all todos."""
-    return list(todos_store.values())
+    """List all todos, optionally filtered by session."""
+    with SessionLocal() as db:
+        query = select(TodoRow)
+        if session_id:
+            query = query.where(TodoRow.session_id == session_id)
+        rows = db.execute(query).scalars().all()
+        return [_todo_to_model(r) for r in rows]
 
 
 def complete_todo(todo_id: str, completed: bool) -> Optional[TodoItem]:
     """Mark a todo as completed."""
-    if todo_id in todos_store:
-        todos_store[todo_id].completed = completed
+    with SessionLocal() as db:
+        row = db.get(TodoRow, todo_id)
+        if not row:
+            return None
+        row.completed = completed
+        db.commit()
+        db.refresh(row)
         logger.info(f"Todo {todo_id} completed={completed}")
-        return todos_store[todo_id]
-    return None
+        return _todo_to_model(row)
 
 
 def get_event(event_id: str) -> Optional[CalendarEvent]:
     """Get a calendar event by ID."""
-    return events_store.get(event_id)
+    with SessionLocal() as db:
+        row = db.get(CalendarEventRow, event_id)
+        return _event_to_model(row) if row else None
 
 
 def list_events(session_id: str = None) -> List[CalendarEvent]:
-    """List all calendar events."""
-    return list(events_store.values())
+    """List all calendar events, optionally filtered by session."""
+    with SessionLocal() as db:
+        query = select(CalendarEventRow)
+        if session_id:
+            query = query.where(CalendarEventRow.session_id == session_id)
+        rows = db.execute(query).scalars().all()
+        return [_event_to_model(r) for r in rows]
 
 
 def delete_todo(todo_id: str) -> bool:
     """Delete a todo."""
-    if todo_id in todos_store:
-        del todos_store[todo_id]
+    with SessionLocal() as db:
+        row = db.get(TodoRow, todo_id)
+        if not row:
+            return False
+        db.delete(row)
+        db.commit()
         return True
-    return False
 
 
 def delete_event(event_id: str) -> bool:
     """Delete a calendar event."""
-    if event_id in events_store:
-        del events_store[event_id]
+    with SessionLocal() as db:
+        row = db.get(CalendarEventRow, event_id)
+        if not row:
+            return False
+        db.delete(row)
+        db.commit()
         return True
-    return False

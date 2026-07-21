@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { ArrowLeft, ScreenShare } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { ArrowLeft, ScreenShare, EyeOff, Eye } from "lucide-react";
 import { api } from "../lib/api";
 import RecapPanel from "./RecapPanel";
 import QAPanel from "./QAPanel";
@@ -50,7 +50,9 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
   const [displayName, setDisplayName] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showVideo, setShowVideo] = useState(true);
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const displayStreamRef = useRef<MediaStream | null>(null);
   const chunkIndexRef = useRef(0);
@@ -69,8 +71,21 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     displayStreamRef.current = null;
     headerBlobRef.current = null;
     pendingFragmentsRef.current = [];
+    if (videoRef.current) videoRef.current.srcObject = null;
     setIsCapturing(false);
   };
+
+  // Attach the video-only preview once the <video> element exists in the DOM
+  // (it only renders while isCapturing is true). Video-only and muted so the
+  // shared tab/app's audio - already playing out loud from its real source -
+  // doesn't get played a second time through this mirrored preview.
+  useEffect(() => {
+    if (isCapturing && videoRef.current && displayStreamRef.current) {
+      const videoOnlyStream = new MediaStream(displayStreamRef.current.getVideoTracks());
+      videoRef.current.srcObject = videoOnlyStream;
+      videoRef.current.play().catch(console.error);
+    }
+  }, [isCapturing]);
 
   const handleStartCapture = async () => {
     setError(null);
@@ -103,18 +118,19 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
       return;
     }
 
-    // We only need the audio - stop the video track immediately.
-    displayStream.getVideoTracks().forEach((t) => t.stop());
     const audioOnlyStream = new MediaStream(audioTracks);
     displayStreamRef.current = displayStream;
 
     const slug = slugify(sessionName);
     const newSessionId = slug ? `screenshare_${slug}_${Date.now()}` : `screenshare_${Date.now()}`;
+    const newDisplayName = sessionName.trim() || "Untitled session";
     setSessionId(newSessionId);
-    setDisplayName(sessionName.trim() || "Untitled session");
+    setDisplayName(newDisplayName);
     chunkIndexRef.current = 0;
     headerBlobRef.current = null;
     pendingFragmentsRef.current = [];
+
+    api.createSession(newSessionId, newDisplayName, "screen-share").catch(console.error);
 
     // A single continuous recorder for the whole session, using MediaRecorder's
     // own native timeslice firing (see the NATIVE_FRAGMENT_MS comment above)
@@ -235,12 +251,30 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
                     Capturing: {displayName}
                   </span>
                 </div>
-                <button
-                  onClick={handleStopCapture}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700"
-                >
-                  Stop Sharing
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowVideo((v) => !v)}
+                    className="flex items-center text-green-700 hover:text-green-900 font-medium px-3 py-2"
+                  >
+                    {showVideo ? (
+                      <>
+                        <EyeOff className="w-4 h-4 mr-1.5" />
+                        Hide video
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4 mr-1.5" />
+                        Show video
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleStopCapture}
+                    className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700"
+                  >
+                    Stop Sharing
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex items-center justify-between">
@@ -260,6 +294,18 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
                 >
                   Start New Session
                 </button>
+              </div>
+            )}
+
+            {/* Live video preview - watch right here instead of switching tabs */}
+            {isCapturing && showVideo && (
+              <div className="bg-black rounded-xl shadow-lg overflow-hidden">
+                <video
+                  ref={videoRef}
+                  muted
+                  playsInline
+                  className="w-full max-h-[60vh] object-contain"
+                />
               </div>
             )}
 
