@@ -15,12 +15,15 @@ interface ScreenCaptureModeProps {
   onBack: () => void;
 }
 
-const CHUNK_INTERVAL_MS = 10_000;
-// How soon after starting to grab a "header" blob (just enough for the encoder
-// to flush complete WebM header/track metadata) - kept as short as possible
-// since whatever real audio lands in this window gets prepended to (and
-// leaks into the transcript of) every later chunk.
-const HEADER_CAPTURE_MS = 150;
+// MediaRecorder's native timeslice firing happens in the browser's media
+// pipeline, not the JS event loop - unlike setInterval/setTimeout, it keeps
+// firing reliably even when the tab is backgrounded (which happens the
+// moment the user switches to actually look at whatever they're sharing).
+// So chunks are built from small native-timeslice fragments accumulated in
+// the browser, not from manually-scheduled requestData() calls.
+const NATIVE_FRAGMENT_MS = 250;
+const FRAGMENTS_PER_CHUNK = 40; // 40 x 250ms fragments = one 10s uploaded chunk
+const CHUNK_INTERVAL_MS = NATIVE_FRAGMENT_MS * FRAGMENTS_PER_CHUNK;
 const MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
@@ -52,8 +55,7 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
   const displayStreamRef = useRef<MediaStream | null>(null);
   const chunkIndexRef = useRef(0);
   const headerBlobRef = useRef<Blob | null>(null);
-  const chunkIntervalIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const headerTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingFragmentsRef = useRef<Blob[]>([]);
 
   const isSupported =
     typeof window !== "undefined" &&
@@ -61,13 +63,12 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     typeof MediaRecorder !== "undefined";
 
   const handleStopCapture = () => {
-    if (chunkIntervalIdRef.current) clearInterval(chunkIntervalIdRef.current);
-    if (headerTimeoutIdRef.current) clearTimeout(headerTimeoutIdRef.current);
     mediaRecorderRef.current?.stop();
     mediaRecorderRef.current = null;
     displayStreamRef.current?.getTracks().forEach((t) => t.stop());
     displayStreamRef.current = null;
     headerBlobRef.current = null;
+    pendingFragmentsRef.current = [];
     setIsCapturing(false);
   };
 
@@ -113,38 +114,40 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     setDisplayName(sessionName.trim() || "Untitled session");
     chunkIndexRef.current = 0;
     headerBlobRef.current = null;
+    pendingFragmentsRef.current = [];
 
-    // A single continuous recorder for the whole session (re-attaching a
-    // fresh MediaRecorder per chunk to a real display-capture track proved
-    // unreliable in practice, even though it worked in synthetic testing).
+    // A single continuous recorder for the whole session, using MediaRecorder's
+    // own native timeslice firing (see the NATIVE_FRAGMENT_MS comment above)
+    // rather than manually-scheduled requestData() calls, which stall for
+    // long stretches whenever the tab is backgrounded.
     //
     // MediaRecorder only produces one complete, valid standalone audio file
-    // in its FIRST dataavailable blob - every blob after that (whether from
-    // a timeslice or a manual requestData() call) is a raw continuation
-    // fragment with no header of its own, not independently decodable
-    // (tried stripping the header blob down to zero audio via binary Cluster
-    // slicing - that broke parsing entirely, the trailing fragment needs a
-    // preceding Cluster to attach to). So: keep a real but very short (see
-    // HEADER_CAPTURE_MS) header blob and prepend it to every later chunk
-    // before upload, reconstructing something a WebM/Matroska demuxer can
-    // parse, instead of a headerless fragment alone.
+    // in its FIRST fragment - every fragment after that is a raw continuation
+    // with no header of its own, not independently decodable. So the first
+    // 1s fragment is kept as a "header" and prepended to every later chunk's
+    // upload (tried stripping it down to zero real audio via binary Cluster
+    // slicing - that broke parsing entirely, a trailing fragment needs a
+    // preceding Cluster to attach to - so a short real fragment it is).
     const recorder = new MediaRecorder(audioOnlyStream, { mimeType });
 
     recorder.ondataavailable = async (event: BlobEvent) => {
       if (event.data.size === 0) return;
 
       if (!headerBlobRef.current) {
-        // This is the header-capture firing, not a real chunk - don't upload
-        // it or advance the chunk index. The real per-chunk uploads happen
-        // in the setInterval loop below.
         headerBlobRef.current = event.data;
         return;
       }
 
+      pendingFragmentsRef.current.push(event.data);
+      if (pendingFragmentsRef.current.length < FRAGMENTS_PER_CHUNK) return;
+
       const offsetSeconds = chunkIndexRef.current * (CHUNK_INTERVAL_MS / 1000);
       chunkIndexRef.current += 1;
 
-      const uploadBlob = new Blob([headerBlobRef.current, event.data], { type: mimeType });
+      const fragments = pendingFragmentsRef.current;
+      pendingFragmentsRef.current = [];
+
+      const uploadBlob = new Blob([headerBlobRef.current, ...fragments], { type: mimeType });
       try {
         await api.uploadAudioChunk(newSessionId, uploadBlob, offsetSeconds, mimeType);
       } catch (err) {
@@ -155,20 +158,8 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     // If the user stops sharing via the browser's native "Stop sharing" bar.
     audioTracks[0].addEventListener("ended", handleStopCapture);
 
-    // Start recording continuously (no timeslice - we pull data manually via
-    // requestData() so we control exactly when the header-capture blob and
-    // each real chunk boundary happen).
-    recorder.start();
+    recorder.start(NATIVE_FRAGMENT_MS);
     mediaRecorderRef.current = recorder;
-
-    headerTimeoutIdRef.current = setTimeout(() => {
-      if (recorder.state === "recording") recorder.requestData();
-    }, HEADER_CAPTURE_MS);
-
-    chunkIntervalIdRef.current = setInterval(() => {
-      if (recorder.state === "recording") recorder.requestData();
-    }, CHUNK_INTERVAL_MS);
-
     setIsCapturing(true);
   };
 
