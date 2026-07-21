@@ -46,6 +46,8 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const displayStreamRef = useRef<MediaStream | null>(null);
   const chunkIndexRef = useRef(0);
+  const isCapturingRef = useRef(false);
+  const chunkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isSupported =
     typeof window !== "undefined" &&
@@ -53,11 +55,51 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     typeof MediaRecorder !== "undefined";
 
   const handleStopCapture = () => {
+    isCapturingRef.current = false;
+    if (chunkTimeoutRef.current) clearTimeout(chunkTimeoutRef.current);
     mediaRecorderRef.current?.stop();
     mediaRecorderRef.current = null;
     displayStreamRef.current?.getTracks().forEach((t) => t.stop());
     displayStreamRef.current = null;
     setIsCapturing(false);
+  };
+
+  // MediaRecorder.start(timeslice) only produces one complete, self-contained
+  // audio file in its first dataavailable blob - every blob after that is a
+  // raw continuation fragment with no header, not independently decodable.
+  // So each chunk gets its own short-lived recorder instance (stop -> upload
+  // -> start a fresh one) instead of relying on the timeslice parameter.
+  const recordNextChunk = (stream: MediaStream, mimeType: string, sessionIdForUpload: string) => {
+    if (!isCapturingRef.current) return;
+
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const blobs: Blob[] = [];
+
+    recorder.ondataavailable = (event: BlobEvent) => {
+      if (event.data.size > 0) blobs.push(event.data);
+    };
+
+    recorder.onstop = async () => {
+      const offsetSeconds = chunkIndexRef.current * (CHUNK_INTERVAL_MS / 1000);
+      chunkIndexRef.current += 1;
+
+      const blob = new Blob(blobs, { type: mimeType });
+      if (blob.size > 0) {
+        try {
+          await api.uploadAudioChunk(sessionIdForUpload, blob, offsetSeconds, mimeType);
+        } catch (err) {
+          console.error("Error uploading audio chunk:", err);
+        }
+      }
+
+      recordNextChunk(stream, mimeType, sessionIdForUpload);
+    };
+
+    recorder.start();
+    mediaRecorderRef.current = recorder;
+    chunkTimeoutRef.current = setTimeout(() => {
+      if (recorder.state !== "inactive") recorder.stop();
+    }, CHUNK_INTERVAL_MS);
   };
 
   const handleStartCapture = async () => {
@@ -101,25 +143,12 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
     setSessionId(newSessionId);
     setDisplayName(sessionName.trim() || "Untitled session");
     chunkIndexRef.current = 0;
-
-    const recorder = new MediaRecorder(audioOnlyStream, { mimeType });
-
-    recorder.ondataavailable = async (event: BlobEvent) => {
-      if (event.data.size === 0) return;
-      const offsetSeconds = chunkIndexRef.current * (CHUNK_INTERVAL_MS / 1000);
-      chunkIndexRef.current += 1;
-      try {
-        await api.uploadAudioChunk(newSessionId, event.data, offsetSeconds, mimeType);
-      } catch (err) {
-        console.error("Error uploading audio chunk:", err);
-      }
-    };
+    isCapturingRef.current = true;
 
     // If the user stops sharing via the browser's native "Stop sharing" bar.
     audioTracks[0].addEventListener("ended", handleStopCapture);
 
-    recorder.start(CHUNK_INTERVAL_MS);
-    mediaRecorderRef.current = recorder;
+    recordNextChunk(audioOnlyStream, mimeType, newSessionId);
     setIsCapturing(true);
   };
 
