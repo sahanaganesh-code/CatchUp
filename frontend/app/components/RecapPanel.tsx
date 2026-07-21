@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { api, RecapResponse } from "../lib/api";
 import EvidenceList from "./EvidenceList";
+import MarkdownAnswer from "./MarkdownAnswer";
 
 interface RecapPanelProps {
   sessionId: string;
@@ -55,7 +56,7 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
             <h3 className="text-sm font-semibold text-gray-700 mb-2">
               Summary
             </h3>
-            <p className="text-gray-800">{recap.summary}</p>
+            <MarkdownAnswer>{recap.summary}</MarkdownAnswer>
           </div>
 
           {recap.key_points.length > 0 && (
@@ -67,7 +68,7 @@ export default function RecapPanel({ sessionId }: RecapPanelProps) {
                 {recap.key_points.map((point, index) => (
                   <li key={index} className="flex items-start">
                     <span className="text-blue-600 mr-2">•</span>
-                    <span className="text-gray-800">{point}</span>
+                    <MarkdownAnswer className="flex-1">{point}</MarkdownAnswer>
                   </li>
                 ))}
               </ul>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MessageCircle, Send, Loader2 } from "lucide-react";
 import { api, QuestionResponse } from "../lib/api";
 import EvidenceList from "./EvidenceList";
+import MarkdownAnswer from "./MarkdownAnswer";
 
 interface QAPanelProps {
   sessionId: string;
@@ -88,7 +89,7 @@ export default function QAPanel({ sessionId }: QAPanelProps) {
                 <p className="font-semibold text-gray-900 mb-2">
                   Q: {item.question}
                 </p>
-                <p className="text-gray-800">{item.response.answer}</p>
+                <MarkdownAnswer>{item.response.answer}</MarkdownAnswer>
               </div>
 
               {item.response.has_sufficient_evidence ? (

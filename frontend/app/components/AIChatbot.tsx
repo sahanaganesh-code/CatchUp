@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bot, Send, Loader2, X } from "lucide-react";
 import { api, ChatbotResponse } from "../lib/api";
 import EvidenceList from "./EvidenceList";
+import MarkdownAnswer from "./MarkdownAnswer";
 
 interface ChatMessage {
   type: "user" | "bot";
@@ -103,7 +104,7 @@ export default function AIChatbot() {
               ) : (
                 <div className="flex justify-start">
                   <div className="bg-gray-100 text-gray-900 px-4 py-2 rounded-2xl rounded-tl-sm max-w-[85%]">
-                    <p className="mb-2">{msg.content}</p>
+                    <MarkdownAnswer className="mb-2">{msg.content}</MarkdownAnswer>
                     {msg.response && msg.response.has_sufficient_evidence && (
                       <div className="mt-2">
                         <EvidenceList

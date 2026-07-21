@@ -22,7 +22,7 @@ interface ScreenCaptureModeProps {
 // So chunks are built from small native-timeslice fragments accumulated in
 // the browser, not from manually-scheduled requestData() calls.
 const NATIVE_FRAGMENT_MS = 250;
-const FRAGMENTS_PER_CHUNK = 40; // 40 x 250ms fragments = one 10s uploaded chunk
+const FRAGMENTS_PER_CHUNK = 20; // 20 x 250ms fragments = one 5s uploaded chunk
 const CHUNK_INTERVAL_MS = NATIVE_FRAGMENT_MS * FRAGMENTS_PER_CHUNK;
 const MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
@@ -193,7 +193,7 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
               desktop.
             </p>
           </div>
-        ) : !isCapturing ? (
+        ) : !sessionId ? (
           <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Share Your Screen</h2>
             <p className="text-gray-600 mb-6">
@@ -227,24 +227,45 @@ export default function ScreenCaptureMode({ onBack }: ScreenCaptureModeProps) {
         ) : (
           <div className="space-y-6">
             {/* Status */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse" />
-                <span className="text-green-800 font-medium">
-                  Capturing: {displayName}
-                </span>
+            {isCapturing ? (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse" />
+                  <span className="text-green-800 font-medium">
+                    Capturing: {displayName}
+                  </span>
+                </div>
+                <button
+                  onClick={handleStopCapture}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700"
+                >
+                  Stop Sharing
+                </button>
               </div>
-              <button
-                onClick={handleStopCapture}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700"
-              >
-                Stop Sharing
-              </button>
-            </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-gray-400 rounded-full mr-3" />
+                  <span className="text-gray-700 font-medium">
+                    Session ended: {displayName}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setSessionId("");
+                    setSessionName("");
+                    setError(null);
+                  }}
+                  className="bg-amber-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-amber-700"
+                >
+                  Start New Session
+                </button>
+              </div>
+            )}
 
-            {/* Main Content */}
+            {/* Main Content - stays visible after stopping so the session isn't lost */}
             <div className="space-y-6">
-              <TranscriptViewer sessionId={sessionId} autoRefreshMs={8000} />
+              <TranscriptViewer sessionId={sessionId} autoRefreshMs={isCapturing ? 4000 : undefined} />
 
               <div className="grid lg:grid-cols-2 gap-6">
                 <RecapPanel sessionId={sessionId} />
