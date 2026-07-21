@@ -1,6 +1,6 @@
 """
 Content manager for notes, todos, and calendar events.
-Optimized for Google Meet transcripts and Google Calendar integration.
+Optimized for meeting transcripts and Google Calendar integration.
 In production, these would be stored in a database and synced with Google Workspace.
 """
 from typing import List, Dict, Optional
@@ -17,7 +17,7 @@ import re
 logger = logging.getLogger(__name__)
 
 # System instruction for content extraction
-CONTENT_EXTRACTION_SYSTEM_INSTRUCTION = """You are an expert at analyzing Google Meet transcripts and extracting structured information.
+CONTENT_EXTRACTION_SYSTEM_INSTRUCTION = """You are an expert at analyzing meeting transcripts and extracting structured information.
 You excel at:
 - Identifying actionable tasks and their owners
 - Detecting meeting scheduling discussions
@@ -100,9 +100,9 @@ def generate_todos_from_meeting(session_id: str) -> List[TodoItem]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this Google Meet transcript and extract TODO items.
+    prompt = f"""Analyze this meeting transcript and extract TODO items.
 
-Google Meet Transcript:
+Meeting Transcript:
 {context}
 
 For each actionable todo item, extract:
@@ -208,9 +208,9 @@ def generate_calendar_events(session_id: str) -> List[CalendarEvent]:
         for chunk in all_chunks[:30]
     ])
     
-    prompt = f"""Analyze this Google Meet transcript and extract calendar events for Google Calendar.
+    prompt = f"""Analyze this meeting transcript and extract calendar events for Google Calendar.
 
-Google Meet Transcript:
+Meeting Transcript:
 {context}
 
 For each mentioned meeting or event, extract:

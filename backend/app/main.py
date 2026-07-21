@@ -10,7 +10,6 @@ from app.models import (
     ProposeActionsResponse,
     ApproveActionRequest,
     ApproveActionResponse,
-    GoogleMeetWebhookPayload,
     CreateNoteRequest,
     UpdateNoteRequest,
     Note,
@@ -23,7 +22,6 @@ from app.models import (
 )
 from app.rag import answer_question, generate_recap
 from app.actions import propose_actions, approve_action, list_actions
-from app.google_meet import process_google_meet_webhook
 from app.stt import process_audio_upload
 from app.store import vector_store
 from app.config import settings
@@ -73,7 +71,6 @@ def read_root():
 def ingest_transcript(request: IngestTranscriptRequest):
     """
     Ingest transcript chunks into the vector store.
-    Supports both Google Meet and in-person modes.
     """
     try:
         logger.info(f"Ingesting {len(request.chunks)} chunks for session {request.session_id} (mode: {request.mode})")
@@ -170,20 +167,6 @@ def get_actions():
         logger.error(f"Error getting actions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/api/google-meet/webhook")
-def google_meet_webhook(payload: GoogleMeetWebhookPayload):
-    """
-    Google Meet real-time transcription webhook endpoint (stub).
-    In production, this would receive real-time transcript chunks from Google Meet.
-    """
-    try:
-        logger.info(f"Received Google Meet webhook for meeting {payload.meeting_code}")
-        success = process_google_meet_webhook(payload)
-        return {"status": "success" if success else "error"}
-    except Exception as e:
-        logger.error(f"Error processing Google Meet webhook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/audio/upload")

@@ -13,9 +13,8 @@ class TranscriptChunk(BaseModel):
 class IngestTranscriptRequest(BaseModel):
     """Request to ingest transcript chunks."""
     session_id: str = Field(..., description="Unique session identifier")
-    mode: Literal["google-meet", "in-person"] = Field(..., description="Meeting mode")
+    mode: Literal["in-person"] = Field(..., description="Meeting mode")
     chunks: List[TranscriptChunk] = Field(..., description="List of transcript chunks")
-    meet_metadata: Optional[dict] = Field(None, description="Google Meet metadata (meeting code, participants, etc.)")
 
 
 class Evidence(BaseModel):
@@ -92,14 +91,6 @@ class ApproveActionResponse(BaseModel):
     approved: bool
     executed: bool
     message: str
-
-
-class GoogleMeetWebhookPayload(BaseModel):
-    """Payload for Google Meet real-time transcription webhook."""
-    meeting_code: str = Field(..., description="Google Meet meeting code")
-    conference_id: str = Field(..., description="Google Meet conference ID")
-    transcript_chunk: TranscriptChunk
-    participant_info: Optional[dict] = Field(None, description="Participant metadata")
 
 
 class TodoItem(BaseModel):

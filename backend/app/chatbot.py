@@ -1,7 +1,6 @@
 """
 AI Chatbot that can answer questions about all content:
-Google Meet transcripts, notes, todos, and Google Calendar events.
-Optimized for Google Workspace integration and context awareness.
+meeting transcripts, notes, todos, and calendar events.
 """
 from typing import List
 from app.models import ChatbotResponse, Evidence
@@ -13,16 +12,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# System instruction for Google Workspace-aware chatbot
-WORKSPACE_CHATBOT_SYSTEM_INSTRUCTION = """You are an intelligent assistant for Google Workspace users, specializing in meeting analysis.
+# System instruction for the workspace-aware chatbot
+WORKSPACE_CHATBOT_SYSTEM_INSTRUCTION = """You are an intelligent assistant specializing in meeting analysis.
 You help users by:
-- Answering questions about Google Meet transcripts
+- Answering questions about meeting transcripts
 - Tracking action items and todos
 - Managing calendar events and schedules
 - Organizing meeting notes
 - Providing context-aware insights across all meeting content
 
-You understand Google Workspace terminology and workflows. Always provide evidence-based answers with specific references."""
+Always provide evidence-based answers with specific references."""
 
 
 def build_context_from_all_content(question: str, context_types: List[str]) -> tuple[str, List[Evidence]]:
@@ -33,17 +32,17 @@ def build_context_from_all_content(question: str, context_types: List[str]) -> t
     context_parts = []
     all_evidence = []
     
-    # Search Google Meet transcripts
+    # Search meeting transcripts
     if "transcripts" in context_types:
         # Get all sessions and search across them
         # For MVP, we'll search recent chunks
         # In production, maintain a session index
         try:
             # This is a simplified approach - in production, track all session IDs
-            logger.info("Searching Google Meet transcripts...")
-            context_parts.append("=== GOOGLE MEET TRANSCRIPTS ===")
+            logger.info("Searching meeting transcripts...")
+            context_parts.append("=== MEETING TRANSCRIPTS ===")
             # For now, we'll note this limitation
-            context_parts.append("(Full transcript search requires session_id - use Q&A panel for specific Google Meet sessions)")
+            context_parts.append("(Full transcript search requires session_id - use Q&A panel for a specific session)")
         except Exception as e:
             logger.error(f"Error searching transcripts: {e}")
     
@@ -131,7 +130,7 @@ def chat_with_content(question: str, context_types: List[str]) -> ChatbotRespons
         for i, ev in enumerate(evidence)
     ])
     
-    prompt = f"""You are answering a question about Google Workspace meeting content.
+    prompt = f"""You are answering a question about meeting content.
 
 Question: {question}
 
@@ -143,7 +142,7 @@ Evidence:
 
 Instructions:
 1. Answer the question using ONLY the information in the evidence above
-2. Reference specific dates, times, and sources (e.g., "According to the Google Meet transcript...", "In the calendar event...")
+2. Reference specific dates, times, and sources (e.g., "According to the meeting transcript...", "In the calendar event...")
 3. For action items, mention assignees and deadlines if available
 4. For calendar events, include date, time, and duration details
 5. If the evidence doesn't fully answer the question, clearly state what information is missing

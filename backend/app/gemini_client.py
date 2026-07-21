@@ -1,7 +1,7 @@
 """
 Gemini API client wrapper for embeddings and text generation.
 Uses google.generativeai package with REST transport to avoid gRPC issues.
-Optimized for Google Workspace integration and Google Meet transcripts.
+Optimized for meeting transcript analysis.
 """
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
@@ -38,7 +38,7 @@ GENERATION_CONFIG = {
 def embed_texts(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
     """
     Embed texts using Gemini embedding model.
-    Optimized for Google Meet transcript chunks and meeting content.
+    Optimized for meeting transcript chunks and meeting content.
     
     Args:
         texts: List of text strings to embed

@@ -1,18 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Video, Mic, ScreenShare } from "lucide-react";
-import GoogleMeetMode from "./components/GoogleMeetMode";
+import { Mic, ScreenShare } from "lucide-react";
 import InPersonMode from "./components/InPersonMode";
 import ScreenCaptureMode from "./components/ScreenCaptureMode";
 import AIChatbot from "./components/AIChatbot";
 
 export default function Home() {
-  const [mode, setMode] = useState<"google-meet" | "in-person" | "screen-share" | null>(null);
-
-  if (mode === "google-meet") {
-    return <GoogleMeetMode onBack={() => setMode(null)} />;
-  }
+  const [mode, setMode] = useState<"in-person" | "screen-share" | null>(null);
 
   if (mode === "in-person") {
     return <InPersonMode onBack={() => setMode(null)} />;
@@ -26,7 +21,7 @@ export default function Home() {
     <>
       <AIChatbot />
       <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-6xl w-full">
+        <div className="max-w-4xl w-full">
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">CatchUp</h1>
           <p className="text-xl text-gray-600 mb-2">
@@ -37,27 +32,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Google Meet Mode */}
-          <button
-            onClick={() => setMode("google-meet")}
-            className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-shadow border-2 border-transparent hover:border-blue-500 text-left"
-          >
-            <div className="flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-6">
-              <Video className="w-8 h-8 text-blue-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Google Meet Mode
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Real-time captions and transcripts for remote work, online classes,
-              and telehealth appointments. Perfect for hearing accessibility.
-            </p>
-            <div className="flex items-center text-sm text-blue-600 font-medium">
-              Get Started →
-            </div>
-          </button>
-
+        <div className="grid md:grid-cols-2 gap-6">
           {/* In-Person Mode */}
           <button
             onClick={() => setMode("in-person")}
@@ -70,7 +45,7 @@ export default function Home() {
               In-Person Lecture Mode
             </h2>
             <p className="text-gray-600 mb-4">
-              Record classes, therapy sessions, or support groups. Focus on 
+              Record classes, therapy sessions, or support groups. Focus on
               participating instead of note-taking. Ideal for ADHD and learning disabilities.
             </p>
             <div className="flex items-center text-sm text-green-600 font-medium">

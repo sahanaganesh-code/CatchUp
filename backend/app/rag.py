@@ -8,8 +8,8 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# System instruction for Google Meet meeting analysis
-MEETING_ANALYSIS_SYSTEM_INSTRUCTION = """You are an expert meeting analyst specializing in Google Meet transcripts. 
+# System instruction for meeting analysis
+MEETING_ANALYSIS_SYSTEM_INSTRUCTION = """You are an expert meeting analyst.
 Your role is to provide accurate, evidence-based answers about meeting content. You excel at:
 - Identifying key decisions and action items
 - Tracking participant contributions
@@ -73,11 +73,11 @@ def answer_question(session_id: str, question: str) -> QuestionResponse:
     # Build prompt with evidence
     evidence_text = format_evidence_for_prompt(evidence)
     
-    prompt = f"""You are analyzing a Google Meet transcript to answer a specific question.
+    prompt = f"""You are analyzing a meeting transcript to answer a specific question.
 
 Question: {question}
 
-Evidence from Google Meet transcript:
+Evidence from the transcript:
 {evidence_text}
 
 Instructions:
@@ -163,9 +163,9 @@ def generate_recap(session_id: str) -> RecapResponse:
         for chunk in all_chunks[:20]  # Limit context size
     ])
     
-    prompt = f"""Analyze this Google Meet transcript and create a comprehensive meeting recap.
+    prompt = f"""Analyze this meeting transcript and create a comprehensive meeting recap.
 
-Google Meet Transcript:
+Meeting Transcript:
 {context}
 
 Generate a professional meeting recap with:

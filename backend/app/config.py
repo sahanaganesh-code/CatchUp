@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -10,8 +9,7 @@ class Settings(BaseSettings):
     
     # Google Workspace (optional for future integration)
     google_calendar_enabled: bool = False
-    google_meet_api_key: Optional[str] = None
-    
+
     # ChromaDB
     chroma_persist_dir: str = "./chroma_db"
     chroma_collection_name: str = "catchup_transcripts_gemini"

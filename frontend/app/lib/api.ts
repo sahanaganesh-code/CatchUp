@@ -80,7 +80,7 @@ export interface ChatbotResponse {
 export const api = {
   async ingestTranscript(
     sessionId: string,
-    mode: "google-meet" | "in-person",
+    mode: "in-person",
     chunks: TranscriptChunk[]
   ) {
     const response = await axios.post(`${API_URL}/api/ingest`, {
